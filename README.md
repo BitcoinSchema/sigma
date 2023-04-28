@@ -41,7 +41,7 @@ To use the Sigma Protocol library, follow the instructions below:
 1. Install the library using npm:
 
 ```bash
-yarnl <sigma-protocol>
+yarn <sigma-protocol>
 ```
 
 2. Import the `sign` and `verifySignature` functions from the library:
