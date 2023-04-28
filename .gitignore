@@ -1,0 +1,19 @@
+# Ignore node modules
+node_modules/
+
+# Ignore build output
+dist/
+
+# Ignore TypeScript cache
+.happypack/cache/
+.happypack/tmp/
+.tsbuildinfo
+
+# Ignore IDE and editor files
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+yarn-error.log
+.DS_Store
