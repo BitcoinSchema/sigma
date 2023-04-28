@@ -84,7 +84,7 @@ To build the Sigma Protocol library yourself, follow these steps:
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/sigma-protocol.git
+git clone https://github.com/BitcoinSchema/sigma-protocol.git
 ```
 
 2. Navigate to the project directory and install dependencies:
