@@ -29,10 +29,10 @@ OP_RETURN
 
 Here's a brief explanation of the fields:
 
-* `Additional Data`: The OP\_RETURN data you want to sign. Optional. If present, this library will add a protocol separator character "|" which is not signed. If absent, the library will add "OP\_RETURN" to the script, followed by the SIGMA protocol fields.
-* `Signing Algorithm`: The algorithm used for signing, in this case, "BSM" for Bitcoin Signed Message. No other algorithms are currently supported by the library.
-* `Signing Address`: The P2PKH address derived from the public key of the signer. If using Bitcoin Attestation Protocol to sign with an existing on-chain identity, this should be derived from your current signing key.
-* `Signature`: The Sigma signature generated using the private key corresponding to the signing address. You will see the signature in hex format in Bitcoin scripts, but the library will return this field in Base64 format for the sake of consistency with other signing schemes.
+- `Additional Data`: The OP_RETURN data you want to sign. Optional. If present, this library will add a protocol separator character "|" which is not signed. If absent, the library will add "OP_RETURN" to the script, followed by the SIGMA protocol fields.
+- `Signing Algorithm`: The algorithm used for signing, in this case, "ECDSA" for Standard ECDSA Message Signing using SHA256 as the digest. No other algorithms are currently supported by the library.
+- `Signing Address`: The P2PKH address derived from the public key of the signer. If using Bitcoin Attestation Protocol to sign with an existing on-chain identity, this should be derived from your current signing key.
+- `Signature`: The Sigma signature generated using the private key corresponding to the signing address. You will see the signature in hex format in Bitcoin scripts, but the library will return this field in Base64 format for the sake of consistency with other signing schemes.
 
 ### Library Usage
 
@@ -53,15 +53,20 @@ import { sign, verifySignature } from "sigma-protocol";
 3. Use the `sign` function to sign your data:
 
 ```javascript
-const privateKeyWIF = "L1rWWk8Jv3q6ZKd6ZJ2WVFHN8vZurA9wm1DcoepakHFp8z8kY7YJ"; // Replace this with your private key
-const inputTxIds = ["txid1", "txid2"];
-const data = Buffer.concat(
-  ["pushdata1", "pushdata2"].map((pushdata) => Buffer.from(pushdata))
-);
+const outputScriptAsm = `OP_0 OP_RETURN ${Buffer.from(
+  "pushdata1",
+  "utf-8"
+).toString("hex")} ${Buffer.from("pushdata2", "utf-8").toString("hex")}`;
 
-const { signingAddress, signature } = sign(privateKeyWIF, inputTxIds, data);
-console.log("Signing address:", signingAddress);
-console.log("Signature:", signature);
+const script = Script.from_asm_string(outputScriptAsm);
+
+const tx = new Transaction(1, 0);
+const txOut = new TxOut(BigInt(0), script);
+tx.add_output(txOut);
+
+const sigma = new Sigma(tx, 0, 0);
+
+sigma.sign(privateKey);
 ```
 
 4. Use the `verifySignature` function to verify the signature:
