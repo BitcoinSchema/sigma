@@ -6,7 +6,7 @@ description: A digital signature scheme for signing Bitcoin transaction data.
 
 ### Abstract
 
-In an increasingly adversarial digital world, the importance of identity verification and secure transactions has become paramount. The Sigma Protocol is designed to enhance transaction security by signing custom output scripts in blockchain transactions. This paper proposes a protocol that addresses replay attack concerns by incorporating input transaction IDs (txids) and output data hashes into the signature process, effectively strengthening the identity verification in blockchain transactions.
+In an increasingly adversarial digital world, the importance of identity verification and secure transactions has become paramount. The Sigma Protocol is designed to enhance transaction security by signing custom output scripts in blockchain transactions. This paper proposes a protocol that addresses replay attack concerns by incorporating an input transaction ID (txid) and output data hashes into the signature process to strengthen identity verification in blockchain transactions.
 
 ### Introduction
 
@@ -25,14 +25,16 @@ OP_RETURN
   [Signing Algorithm]
   [Signing Address]
   [Signature]
+  [VIN]
 ```
 
 Here's a brief explanation of the fields:
 
-- `Additional Data`: The OP_RETURN data you want to sign. Optional. If present, this library will add a protocol separator character "|" which is not signed. If absent, the library will add "OP_RETURN" to the script, followed by the SIGMA protocol fields.
-- `Signing Algorithm`: The algorithm used for signing, in this case, "ECDSA" for Standard ECDSA Message Signing using SHA256 as the digest. No other algorithms are currently supported by the library.
-- `Signing Address`: The P2PKH address derived from the public key of the signer. If using Bitcoin Attestation Protocol to sign with an existing on-chain identity, this should be derived from your current signing key.
-- `Signature`: The Sigma signature generated using the private key corresponding to the signing address. You will see the signature in hex format in Bitcoin scripts, but the library will return this field in Base64 format for the sake of consistency with other signing schemes.
+* `Additional Data`: The OP\_RETURN data you want to sign. Optional. If present, this library will add a protocol separator character "|" which is not signed. If absent, the library will add "OP\_RETURN" to the script, followed by the SIGMA protocol fields.
+* `Signing Algorithm`: The algorithm used for signing, in this case, "ECDSA" for Standard ECDSA Message Signing using SHA256 as the digest. No other algorithms are currently supported by the library.
+* `Signing Address`: The P2PKH address derived from the public key of the signer. If using Bitcoin Attestation Protocol to sign with an existing on-chain identity, this should be derived from your current signing key.
+* `Signature`: The Sigma signature generated using the private key corresponding to the signing address. You will see the signature in hex format in Bitcoin scripts, but the library will return this field in Base64 format for the sake of consistency with other signing schemes.
+* `VIN` : The input to reference by index. The txid of this input will be incorporated into the signature.&#x20;
 
 ### Library Usage
 
