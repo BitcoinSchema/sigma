@@ -85,6 +85,42 @@ describe("Sigma Protocol", () => {
     assert.strictEqual(sigma.verify(), true);
   });
 
+  it("specity an input to sign", () => {
+    // This is useful for calculating accurate fees considering the size of the
+    // signature
+
+    // add some inputs
+    const txIn = new TxIn(
+      Buffer.from(
+        "810755d937913d4228e1a4d192046d96c0642e2678d6a90e1cb794b0c2aeb78b",
+        "hex"
+      ),
+      0,
+      Script.from_asm_string(
+        "OP_DUP OP_HASH160 5a009731beae590247297ecee0b1b54aa4b96c5d OP_EQUALVERIFY OP_CHECKSIG"
+      )
+    );
+    const txIn2 = new TxIn(
+      Buffer.from(
+        "810755d937913d4228e1a4d192046d96c0642e2678d6a90e1cb794b0c2aeb78c",
+        "hex"
+      ),
+      0,
+      Script.from_asm_string(
+        "OP_DUP OP_HASH160 5a009731beae590247297ecee0b1b54aa4b96c5c OP_EQUALVERIFY OP_CHECKSIG"
+      )
+    );
+    tx.add_input(txIn);
+    tx.add_input(txIn2);
+
+    const sigma = new Sigma(tx, 0, 0, 1);
+
+    // sign again now that inputs have been added
+    sigma.sign(privateKey);
+
+    assert.strictEqual(sigma.verify(), true);
+  });
+
   it("create a user and platform signature on the same output", () => {
     // This is useful for calculating accurate fees
     // considering the size of the signature
