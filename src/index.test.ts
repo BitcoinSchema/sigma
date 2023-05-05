@@ -7,6 +7,9 @@ describe("Sigma Protocol", () => {
   const privateKey = PrivateKey.from_wif(
     "KzmFJcMXHufPNHixgHNwXBt3mHpErEUG6WFbmuQdy525DezYAi82"
   );
+  const privateKey2 = PrivateKey.from_wif(
+    "L1U5FS1PzJwCiFA43hahBUSLytqVoGjSymKSz5WJ92v8YQBBsGZ1"
+  );
 
   const outputScriptAsm = `OP_0 OP_RETURN ${Buffer.from(
     "pushdata1",
@@ -125,20 +128,32 @@ describe("Sigma Protocol", () => {
     // This is useful for calculating accurate fees
     // considering the size of the signature
 
-    // Sign before adding inputs to create a dummy signature
     const sigma = new Sigma(tx, 0, 0);
 
-    // sign now that inputs have been added
+    // sign the tx
     const { signedTx } = sigma.sign(privateKey);
 
+    // verify the signature
     assert.strictEqual(sigma.verify(), true);
 
-    // Sign before adding inputs to create a dummy signature
+    // Create another signma instance on the same tx, and same output
     const sigma2 = new Sigma(signedTx, 0, 1);
 
-    // sign now that inputs have been added
-    sigma2.sign(privateKey);
+    // add a second signature with a 2nd key
+    sigma2.sign(privateKey2);
 
     assert.strictEqual(sigma2.verify(), true);
+
+    assert.strictEqual(sigma2.getSigInstanceCount(), 2);
+
+    // check the address for instance 1
+    sigma2.setSigmaInstance(0);
+    const address = sigma2.sig?.address;
+    assert.strictEqual("1ACLHVPVnB8AmLCyD5hPQtPCSCccjiUn7H", address);
+
+    // check the address for instance 2
+    sigma2.setSigmaInstance(1);
+    const address2 = sigma2.sig?.address;
+    assert.strictEqual("1Cz3gyTgV7QgMoU6j51pvHdzeeapXfXDtA", address2);
   });
 });

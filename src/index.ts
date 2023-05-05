@@ -142,6 +142,8 @@ export class Sigma {
     const signedTxOut = new TxOut(this.targetTxOut!.get_satoshis(), newScript);
     signedTx.set_output(this._targetVout, signedTxOut);
 
+    this._transaction = signedTx;
+
     return {
       sigmaScript,
       signedTx,
@@ -240,7 +242,9 @@ export class Sigma {
           algorithm: Buffer.from(scriptChunks[i + 1], "hex").toString("utf-8"),
           address: Buffer.from(scriptChunks[i + 2], "hex").toString("utf-8"),
           signature: Buffer.from(scriptChunks[i + 3], "hex").toString("base64"),
-          vin: parseInt(scriptChunks[i + 4]),
+          vin: parseInt(
+            Buffer.from(scriptChunks[i + 4], "hex").toString("utf-8")
+          ),
         } as Sig;
 
         instances.push(sig);
