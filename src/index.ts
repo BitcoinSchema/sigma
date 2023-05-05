@@ -63,7 +63,7 @@ export class Sigma {
     this._sigmaInstance = sigmaInstance;
   };
 
-  get messageHash(): Hash {
+  getMessageHash(): Hash {
     if (!this._inputHash || !this._dataHash) {
       throw new Error("Input hash and data hash must be set");
     }
@@ -76,6 +76,10 @@ export class Sigma {
     return Hash.sha_256(combinedHashes);
   }
 
+  get transaction(): Transaction {
+    return this._transaction;
+  }
+
   // Sign with Sigma protocol
   // privateKey: a bsv-wasm PrivateKey
   // inputs: either an array of TxIn from bsv-wasm or an array o string txids
@@ -85,7 +89,7 @@ export class Sigma {
   //     it should include all the data in the output script prior to the "SIGMA" protocol instance
   //     excluding the "|" protocol separator and "SIGMA" prefix itself
   sign(privateKey: PrivateKey): SignResponse {
-    const message = this.messageHash;
+    const message = this.getMessageHash();
     const vin = this._refVin === -1 ? this._targetVout : this._refVin;
 
     let signature = BSM.sign_message(privateKey, message.to_bytes());
@@ -125,12 +129,14 @@ export class Sigma {
     if (existingSig && this._sigmaInstance === this.getSigInstanceCount()) {
       // Replace the existing signature
       const scriptChunks = existingAsm?.split(" ") || [];
-      const sigIndex = scriptChunks.indexOf(sigmaHex.toUpperCase());
+      const sigIndex = scriptChunks.lastIndexOf(sigmaHex.toUpperCase());
+
+      const newSignedAsmChunks = signedAsm.split(" ");
 
       newScriptAsm = [
         ...scriptChunks.slice(0, sigIndex),
-        signedAsm,
-        ...scriptChunks.slice(sigIndex + 4),
+        ...newSignedAsmChunks,
+        ...scriptChunks.slice(sigIndex + newSignedAsmChunks.length),
       ].join(" ");
     } else {
       // Append the new signature
@@ -142,6 +148,7 @@ export class Sigma {
     const signedTxOut = new TxOut(this.targetTxOut!.get_satoshis(), newScript);
     signedTx.set_output(this._targetVout, signedTxOut);
 
+    // update the object state
     this._transaction = signedTx;
 
     return {
@@ -153,10 +160,9 @@ export class Sigma {
 
   verify = () => {
     if (!this.sig) {
-      // TODO - this is throwing when trying to verify a tx returned from previous signing
       throw new Error("No signature data provided");
     }
-    if (!this.messageHash) {
+    if (!this.getMessageHash()) {
       throw new Error("No tx data provided");
     }
 
@@ -166,7 +172,7 @@ export class Sigma {
     );
 
     return p2pkhAddress.verify_bitcoin_message(
-      this.messageHash.to_bytes(),
+      this.getMessageHash().to_bytes(),
       signature
     );
   };
@@ -202,25 +208,22 @@ export class Sigma {
     const scriptChunks = outputScript?.to_asm_string().split(" ") || [];
 
     // loop over the script chunks and set the endIndex when the nTh instance is found
-    let endIndex: number | null = null;
     let occurances = 0;
     for (let i = 0; i < scriptChunks.length; i++) {
       if (scriptChunks[i].toUpperCase() === sigmaHex.toUpperCase()) {
         if (occurances === this._sigmaInstance) {
-          endIndex = i;
-          break;
+          // the -1 is to account for either the OP_RETURN
+          // or "|" separator which is not signed
+          const dataChunks = scriptChunks.slice(0, i - 1);
+          const dataScript = Script.from_asm_string(dataChunks.join(" "));
+          return Hash.sha_256(dataScript.to_bytes());
         }
         occurances++;
       }
     }
 
-    // the -1 is to account for either the OP_RETURN
-    // or "|" separator which is not signed
-    const dataChunks = scriptChunks.slice(
-      0,
-      endIndex === null ? scriptChunks.length : endIndex - 1
-    );
-    const dataScript = Script.from_asm_string(dataChunks.join(" "));
+    // If no endIndex found, return the hash for the entire script
+    const dataScript = Script.from_asm_string(scriptChunks.join(" "));
     return Hash.sha_256(dataScript.to_bytes());
   };
 

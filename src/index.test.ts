@@ -25,7 +25,7 @@ describe("Sigma Protocol", () => {
   it("signs and verifies a message correctly", () => {
     // Create a new Sigma instance with the transaction and targetVout
     const sigma = new Sigma(tx, 0, 0);
-    console.log({ messageHash: sigma.messageHash.to_hex() });
+    console.log({ messageHash: sigma.getMessageHash().to_hex() });
     // Sign the message
     const { sigmaScript, address, signature, signedTx } =
       sigma.sign(privateKey);
@@ -40,15 +40,62 @@ describe("Sigma Protocol", () => {
     assert.strictEqual(isValid, true);
   });
 
-  it("signed tx is verified", () => {
+  it("generates a correct output script", () => {
     // Create a new Sigma instance with the transaction and targetVout
     const sigma = new Sigma(tx, 0, 0);
-    console.log({ messageHash: sigma.messageHash.to_hex() });
+
+    const out = sigma.transaction.get_output(0);
+
+    const asm = out?.get_script_pub_key().to_asm_string();
+
+    console.log({ asm });
 
     // Sign the message
     const { signedTx } = sigma.sign(privateKey);
 
+    const asmAfter = signedTx
+      .get_output(0)
+      ?.get_script_pub_key()
+      .to_asm_string();
+    console.log({ asmAfter });
+
+    assert.notEqual(asmAfter, asm);
+  });
+
+  it("signed tx is verified", () => {
+    // Create a new Sigma instance with the transaction and targetVout
+    const sigma = new Sigma(tx, 0, 0);
+    console.log({ messageHash: sigma.getMessageHash().to_hex() });
+
+    // ... Before signing
+
+    console.log({ inputHashBeforeSigning: sigma.getInputHash().to_hex() });
+    console.log({ dataHashBeforeSigning: sigma.getDataHash().to_hex() });
+
+    // Sign the message
+    const { signedTx } = sigma.sign(privateKey);
+
+    // ... After signing
+    console.log({ inputHashAfterSigning: sigma.getInputHash().to_hex() });
+    console.log({ dataHashAfterSigning: sigma.getDataHash().to_hex() });
+
+    const inputHash = sigma.getInputHash().to_hex();
+    const dataHash = sigma.getDataHash().to_hex();
+    const messageHash = sigma.getMessageHash().to_hex();
+
     const sigma2 = new Sigma(signedTx);
+
+    //make sure these havent changed
+    const inputHash2 = sigma2.getInputHash().to_hex();
+    const dataHash2 = sigma2.getDataHash().to_hex();
+    const messageHash2 = sigma2.getMessageHash().to_hex();
+
+    assert.strictEqual(inputHash2, inputHash);
+    assert.strictEqual(dataHash2, dataHash);
+    assert.strictEqual(messageHash2, messageHash);
+
+    assert.strictEqual(sigma2.getSigInstanceCount(), 1);
+
     const isValid2 = sigma2.verify();
     assert.strictEqual(isValid2, true);
   });
