@@ -46,10 +46,10 @@ To use the Sigma Protocol library, follow the instructions below:
 yarn add sigma-protocol
 ```
 
-2. Import the `sign` and `verifySignature` functions from the library:
+2. You can use the `verify` method to check a signature:
 
 ```javascript
-import { sign, verifySignature } from "sigma-protocol";
+import { Sigma } from "sigma-protocol";
 ```
 
 3. Use the `sign` function to sign your data:
@@ -71,7 +71,7 @@ const sigma = new Sigma(tx);
 const { signedTx } = sigma.sign(privateKey);
 ```
 
-4. Use the `verifySignature` function to verify the signature:
+4. Use the `verify` method to verify the signature:
 
 ```javascript
 const sigma = new Sigma(tx);
@@ -79,6 +79,37 @@ const sigma = new Sigma(tx);
 const isValid = sigma.verify()
 
 console.log("Signature is valid:", isValid);
+```
+
+You can select a transaction output, and sigma instance to target. If you do not specify a target, the first output and first sigma instance will be assumed.
+
+Here we target output index 1:
+
+```javascript
+const sigma = new Sigma(tx, 1);
+```
+
+Here we target output index 1, sigma instance 2:
+
+```javascript
+// this means there are 2 signatures on a single output
+// this is typical when a user signs, and then a 
+// platform signs covering the user signature
+const sigma = new Sigma(tx, 1);
+```
+
+Once an instance is targeted, you can use verify like normal:
+
+```javascript
+  const isValid = sigma.verify()
+  console.log("Signature is valid:", isValid);
+```
+
+If you sign a tx and the sign it a again the signature will be replaced. However, you can add additional signatures by incrementing the sigma instance number before signing.
+
+```javascript
+  const sigma = new Sigma(tx, 1, 2);
+  sigma.sign(privateKey);
 ```
 
 ### Building the Library:
