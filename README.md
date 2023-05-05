@@ -34,7 +34,7 @@ Here's a brief explanation of the fields:
 * `Signing Algorithm`: The algorithm used for signing, in this case, "ECDSA" for Standard ECDSA Message Signing using SHA256 as the digest. No other algorithms are currently supported by the library.
 * `Signing Address`: The P2PKH address derived from the public key of the signer. If using Bitcoin Attestation Protocol to sign with an existing on-chain identity, this should be derived from your current signing key.
 * `Signature`: The Sigma signature generated using the private key corresponding to the signing address. You will see the signature in hex format in Bitcoin scripts, but the library will return this field in Base64 format for the sake of consistency with other signing schemes.
-* `VIN` : The input to reference by index. The txid of this input will be incorporated into the signature.&#x20;
+* `VIN` : The input to reference by index. The txid of this input will be incorporated into the signature. If a -1 is specified, it indicated the corresponding input will be signed.
 
 ### Library Usage
 
@@ -43,7 +43,7 @@ To use the Sigma Protocol library, follow the instructions below:
 1. Install the library using npm:
 
 ```bash
-yarn <sigma-protocol>
+yarn add sigma-protocol
 ```
 
 2. Import the `sign` and `verifySignature` functions from the library:
@@ -66,21 +66,18 @@ const tx = new Transaction(1, 0);
 const txOut = new TxOut(BigInt(0), script);
 tx.add_output(txOut);
 
-const sigma = new Sigma(tx, 0, 0);
+const sigma = new Sigma(tx);
 
-sigma.sign(privateKey);
+const { signedTx } = sigma.sign(privateKey);
 ```
 
 4. Use the `verifySignature` function to verify the signature:
 
 ```javascript
-const isValid = verifySignature(
-  signingAddress,
-  "BSM",
-  signature,
-  inputTxIds,
-  data
-);
+const sigma = new Sigma(tx);
+
+const isValid = sigma.verify()
+
 console.log("Signature is valid:", isValid);
 ```
 
@@ -91,13 +88,13 @@ To build the Sigma Protocol library yourself, follow these steps:
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/BitcoinSchema/sigma-protocol.git
+git clone https://github.com/BitcoinSchema/sigma.git
 ```
 
 2. Navigate to the project directory and install dependencies:
 
 ```bash
-cd sigma-protocol
+cd sigma
 yarn
 ```
 
