@@ -117,7 +117,7 @@ export class Sigma {
       vin,
     };
 
-    const existingAsm = this.targetTxOut?.get_script_pub_key().to_asm_string();
+    let existingAsm = this.targetTxOut?.get_script_pub_key().to_asm_string();
     const containsOpReturn = existingAsm?.split(" ").includes("OP_RETURN");
     const separator = containsOpReturn ? "OP_SWAP" : "OP_RETURN";
 
@@ -129,19 +129,17 @@ export class Sigma {
     if (existingSig && this._sigmaInstance === this.getSigInstanceCount()) {
       // Replace the existing signature
       const scriptChunks = existingAsm?.split(" ") || [];
-      const sigIndex = scriptChunks.lastIndexOf(sigmaHex.toUpperCase());
+      const sigIndex = this.getSigInstancePosition();
 
       const newSignedAsmChunks = signedAsm.split(" ");
-
-      newScriptAsm = [
-        ...scriptChunks.slice(0, sigIndex),
-        ...newSignedAsmChunks,
-        ...scriptChunks.slice(sigIndex + newSignedAsmChunks.length),
-      ].join(" ");
-    } else {
-      // Append the new signature
-      newScriptAsm = `${existingAsm} ${separator} ${signedAsm}`;
+      if (sigIndex !== -1) {
+        existingAsm = scriptChunks
+          .splice(sigIndex, 5, ...newSignedAsmChunks)
+          .join("");
+      }
     }
+    // Append the new signature
+    newScriptAsm = `${existingAsm} ${separator} ${signedAsm}`;
 
     const newScript = Script.from_asm_string(newScriptAsm);
     const signedTx = Transaction.from_bytes(this._transaction.to_bytes());
@@ -266,5 +264,13 @@ export class Sigma {
     return scriptChunks.filter(
       (chunk) => chunk.toUpperCase() === sigmaHex.toUpperCase()
     ).length;
+  }
+
+  getSigInstancePosition(): number {
+    const existingAsm = this.targetTxOut?.get_script_pub_key().to_asm_string();
+    const scriptChunks = existingAsm?.split(" ") || [];
+    return scriptChunks.findIndex(
+      (chunk) => chunk.toUpperCase() === sigmaHex.toUpperCase()
+    );
   }
 }

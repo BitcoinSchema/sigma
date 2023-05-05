@@ -48,8 +48,6 @@ describe("Sigma Protocol", () => {
 
     const asm = out?.get_script_pub_key().to_asm_string();
 
-    console.log({ asm });
-
     // Sign the message
     const { signedTx } = sigma.sign(privateKey);
 
