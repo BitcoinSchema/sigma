@@ -7,7 +7,7 @@ description: A digital signature scheme for signing Bitcoin transaction data.
 <figure><img src="images/SIGMA.svg" alt=""><figcaption></figcaption></figure>
 
 {% hint style="info" %}
-This repo contains the SIGMA protocol specification, and a node library for signing and verifying bsv-wasm transactions. See the [Library usage documentation](sigma-library.md) for more information. These docs are best viewed via [GitBook](https://bitcoin-schema.gitbook.io/sigma-protocol/).
+This repo contains the SIGMA protocol specification, and a node library for signing and verifying bsv-wasm transactions. See the [Library usage documentation](sigma-library.md) for more information. These docs are best viewed via [GitBook](https://docs.sigmaidentity.com).
 {% endhint %}
 
 ### Abstract
