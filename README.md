@@ -3,6 +3,7 @@ description: A digital signature scheme for signing Bitcoin transaction data.
 ---
 
 # Sigma Protocol
+<img src="images/SIGMA.svg" alt="isolated" width="100%"/>
 
 ### Abstract
 
