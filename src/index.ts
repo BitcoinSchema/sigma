@@ -20,6 +20,7 @@ export type Sig = {
   signature: string;
   algorithm: Algorithm;
   vin: number;
+  targetVout: number;
 };
 
 export interface SignResponse extends Sig {
@@ -115,6 +116,7 @@ export class Sigma {
       address: address,
       signature: Buffer.from(signature.to_compact_bytes()).toString("base64"),
       vin,
+      targetVout: this._targetVout,
     };
 
     let existingAsm = this.targetTxOut?.get_script_pub_key().to_asm_string();
