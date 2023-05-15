@@ -50,6 +50,16 @@ export class Sigma {
     this.setHashes();
   }
 
+  static fromTransactionHex(
+    transactionHex: string,
+    targetVout: number = 0,
+    sigmaInstance: number = 0,
+    refVin: number = 0
+  ) {
+    const transaction = Transaction.from_hex(transactionHex);
+    return new Sigma(transaction, targetVout, sigmaInstance, refVin);
+  }
+
   setHashes = () => {
     this._inputHash = this.getInputHash();
     this._dataHash = this.getDataHash();
@@ -76,6 +86,10 @@ export class Sigma {
     return Hash.sha_256(combinedHashes);
   }
 
+  getMessageHashHex(): string {
+    return this.getMessageHash().to_hex();
+  }
+
   get transaction(): Transaction {
     return this._transaction;
   }
@@ -91,70 +105,72 @@ export class Sigma {
   sign(privateKey: PrivateKey): SignResponse {
     const message = this.getMessageHash();
     const vin = this._refVin === -1 ? this._targetVout : this._refVin;
+  
+    let signature = this.createSignature(privateKey, message);
+    const scriptASM = this.createScriptAsm(signature.to_compact_hex(), P2PKHAddress.from_pubkey(privateKey.to_public_key()).to_string());
+    const sig = this.setSignature(signature.to_compact_hex(), P2PKHAddress.from_pubkey(privateKey.to_public_key()).to_string(), vin);
+    const signedTxHex = this.createSignedTransaction(scriptASM);
+    const signedTx = Transaction.from_hex(signedTxHex);
+  
+    return {
+      sigmaScript: Script.from_asm_string(scriptASM),
+      signedTx,
+      ...sig,
+    };
+  }
+  
+  createSignature(privateKey: PrivateKey, message: Hash): Signature {
+    return BSM.sign_message(privateKey, message.to_bytes());
+  }
 
-    let signature = BSM.sign_message(privateKey, message.to_bytes());
-
-    const address = P2PKHAddress.from_pubkey(
-      privateKey.to_public_key()
-    ).to_string();
-
-    const signedAsm = `${sigmaHex} ${Buffer.from(
-      Algorithm.BSM,
-      "utf-8"
-    ).toString("hex")} ${Buffer.from(address, "utf-8").toString(
-      "hex"
-    )} ${signature.to_compact_hex()} ${Buffer.from(
-      vin.toString(),
-      "utf-8"
-    ).toString("hex")}`;
-
-    const sigmaScript = Script.from_asm_string(signedAsm);
-
+  setSignature = (signatureHex: string, address: string, vin: number):  Sig => {
     this._sig = {
       algorithm: Algorithm.BSM,
-      address: address,
-      signature: Buffer.from(signature.to_compact_bytes()).toString("base64"),
+      address,
+      signature: Buffer.from(signatureHex, "hex").toString("base64"),
       vin,
     };
-
+    return this._sig;
+  }
+  
+  createScriptAsm(signatureHex: string, address: string): string {
+    const vin = this._refVin === -1 ? this._targetVout : this._refVin;
+  
+    const signedAsm = `${sigmaHex} ${Buffer.from(Algorithm.BSM,"utf-8").toString("hex")} ${Buffer.from(address, "utf-8").toString("hex")} ${signatureHex} ${Buffer.from(vin.toString(),"utf-8").toString("hex")}`;
+  
     let existingAsm = this.targetTxOut?.get_script_pub_key().to_asm_string();
     const containsOpReturn = existingAsm?.split(" ").includes("OP_RETURN");
     const separator = containsOpReturn ? "OP_SWAP" : "OP_RETURN";
-
     let newScriptAsm = "";
-
+  
     const existingSig = this.sig;
-
-    // sigmaIndex is 0 based while count is 1 based
+  
     if (existingSig && this._sigmaInstance === this.getSigInstanceCount()) {
-      // Replace the existing signature
       const scriptChunks = existingAsm?.split(" ") || [];
       const sigIndex = this.getSigInstancePosition();
-
       const newSignedAsmChunks = signedAsm.split(" ");
       if (sigIndex !== -1) {
-        existingAsm = scriptChunks
-          .splice(sigIndex, 5, ...newSignedAsmChunks)
-          .join("");
+        existingAsm = scriptChunks.splice(sigIndex, 5, ...newSignedAsmChunks).join("");
       }
     }
-    // Append the new signature
+  
     newScriptAsm = `${existingAsm} ${separator} ${signedAsm}`;
 
-    const newScript = Script.from_asm_string(newScriptAsm);
+    return newScriptAsm;
+  }
+  
+  createSignedTransaction(scriptAsm: string): string {
+    const newScript = Script.from_asm_string(scriptAsm);
     const signedTx = Transaction.from_bytes(this._transaction.to_bytes());
     const signedTxOut = new TxOut(this.targetTxOut!.get_satoshis(), newScript);
     signedTx.set_output(this._targetVout, signedTxOut);
-
+    
     // update the object state
     this._transaction = signedTx;
-
-    return {
-      sigmaScript,
-      signedTx,
-      ...this._sig,
-    };
+  
+    return signedTx.to_hex();
   }
+  
 
   verify = () => {
     if (!this.sig) {
