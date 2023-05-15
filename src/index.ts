@@ -104,11 +104,10 @@ export class Sigma {
   //     excluding the "|" protocol separator and "SIGMA" prefix itself
   sign(privateKey: PrivateKey): SignResponse {
     const message = this.getMessageHash();
-    const vin = this._refVin === -1 ? this._targetVout : this._refVin;
   
     let signature = this.createSignature(privateKey, message);
     const scriptASM = this.createScriptAsm(signature.to_compact_hex(), P2PKHAddress.from_pubkey(privateKey.to_public_key()).to_string());
-    const sig = this.setSignature(signature.to_compact_hex(), P2PKHAddress.from_pubkey(privateKey.to_public_key()).to_string(), vin);
+    const sig = this.setSignature(signature.to_compact_hex(), P2PKHAddress.from_pubkey(privateKey.to_public_key()).to_string());
     const signedTxHex = this.createSignedTransaction(scriptASM);
     const signedTx = Transaction.from_hex(signedTxHex);
   
@@ -123,7 +122,8 @@ export class Sigma {
     return BSM.sign_message(privateKey, message.to_bytes());
   }
 
-  setSignature = (signatureHex: string, address: string, vin: number):  Sig => {
+  setSignature = (signatureHex: string, address: string):  Sig => {
+    const vin = this._refVin === -1 ? this._targetVout : this._refVin;
     this._sig = {
       algorithm: Algorithm.BSM,
       address,
