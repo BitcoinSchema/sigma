@@ -121,7 +121,7 @@ export class Sigma {
 
     let existingAsm = this.targetTxOut?.get_script_pub_key().to_asm_string();
     const containsOpReturn = existingAsm?.split(" ").includes("OP_RETURN");
-    const separator = containsOpReturn ? "OP_SWAP" : "OP_RETURN";
+    const separator = containsOpReturn ? "7c" : "OP_RETURN";
 
     let newScriptAsm = "";
 
