@@ -1,5 +1,9 @@
 # Sigma Library
 
+{% hint style="danger" %}
+This library is a work in progress and is not ready for production use. It is currently producing invalid signatures and verifications when bundled. We are investigating this transpilation / dependency issue and will publish a fix in the coming days.
+{% endhint %}
+
 ### Library Usage
 
 To use the Sigma Protocol library, follow the instructions below:
