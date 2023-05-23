@@ -69,10 +69,11 @@ export class Sigma {
       throw new Error("Input hash and data hash must be set");
     }
 
-    const combinedHashes = new Uint8Array([
-      ...this._inputHash.to_bytes(),
-      ...this._dataHash.to_bytes(),
-    ]);
+    const inputBytes = this._inputHash.to_bytes();
+    const dataBytes = this._dataHash.to_bytes();
+    const combinedHashes = new Uint8Array(inputBytes.length + dataBytes.length);
+    combinedHashes.set(inputBytes, 0);
+    combinedHashes.set(dataBytes, inputBytes.length);
 
     return Hash.sha_256(combinedHashes);
   }
