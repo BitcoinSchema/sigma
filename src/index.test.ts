@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { PrivateKey, Script, Transaction, TxIn, TxOut } from "bsv-wasm";
-import { Sigma } from "./";
+import nock from "nock"; // Import nock
+import { AuthToken, Sigma } from "./";
 
 describe("Sigma Protocol", () => {
   // Test data
@@ -31,12 +32,12 @@ describe("Sigma Protocol", () => {
       sigma.sign(privateKey);
 
     console.log({ address, signature, signedTx });
-    console.log({ sigmaScript: sigmaScript.to_asm_string() });
+    // console.log({ sigmaScript: sigmaScript.to_asm_string() });
 
     // Verify the signature
     const isValid = sigma.verify();
 
-    console.log("Signature is valid:", isValid);
+    // console.log("Signature is valid:", isValid);
     assert.strictEqual(isValid, true);
   });
 
@@ -55,7 +56,7 @@ describe("Sigma Protocol", () => {
       .get_output(0)
       ?.get_script_pub_key()
       .to_asm_string();
-    console.log({ asmAfter });
+    // console.log({ asmAfter });
 
     assert.notEqual(asmAfter, asm);
   });
@@ -63,19 +64,19 @@ describe("Sigma Protocol", () => {
   it("signed tx is verified", () => {
     // Create a new Sigma instance with the transaction and targetVout
     const sigma = new Sigma(tx, 0, 0);
-    console.log({ messageHash: sigma.getMessageHash().to_hex() });
+    // console.log({ messageHash: sigma.getMessageHash().to_hex() });
 
     // ... Before signing
 
-    console.log({ inputHashBeforeSigning: sigma.getInputHash().to_hex() });
-    console.log({ dataHashBeforeSigning: sigma.getDataHash().to_hex() });
+    // console.log({ inputHashBeforeSigning: sigma.getInputHash().to_hex() });
+    // console.log({ dataHashBeforeSigning: sigma.getDataHash().to_hex() });
 
     // Sign the message
     const { signedTx } = sigma.sign(privateKey);
 
     // ... After signing
-    console.log({ inputHashAfterSigning: sigma.getInputHash().to_hex() });
-    console.log({ dataHashAfterSigning: sigma.getDataHash().to_hex() });
+    // console.log({ inputHashAfterSigning: sigma.getInputHash().to_hex() });
+    // console.log({ dataHashAfterSigning: sigma.getDataHash().to_hex() });
 
     const inputHash = sigma.getInputHash().to_hex();
     const dataHash = sigma.getDataHash().to_hex();
@@ -209,5 +210,47 @@ describe("Sigma Protocol", () => {
     const sigma = new Sigma(tx, 0, 0);
     const isValid = sigma.verify();
     assert.strictEqual(isValid, true);
+  });
+
+  it("signs a message correctly with remote signing", async () => {
+    const outputScriptAsm = `OP_0 OP_RETURN ${Buffer.from(
+      "pushdata1",
+      "utf-8"
+    ).toString("hex")} ${Buffer.from("pushdata2", "utf-8").toString("hex")}`;
+
+    const script = Script.from_asm_string(outputScriptAsm);
+    const tx = new Transaction(1, 0);
+    const txOut = new TxOut(BigInt(0), script);
+    tx.add_output(txOut);
+
+    const sigma = new Sigma(tx, 0, 0);
+
+    const mockAddress = "1ACLHVPVnB8AmLCyD5hPQtPCSCccjiUn7H";
+    const mockMessage =
+      "234900c2e071fe9a8cc2a41a6b40d03bb3dac1475162996500b77149ab66bfd4";
+    const mockSignature =
+      "HxKekpndJQqQDQVAgH/SaInseYRfqtjde0eWZm+fkWc5CRnZ7ey1zJc7dssNb4I+OwcJPfTQLvUHwCxevFRP4HE=";
+
+    // Set up mock HTTP server
+    nock("http://localhost:21000").post("/sign").reply(200, {
+      address: mockAddress,
+      sig: mockSignature,
+      message: mockMessage,
+      ts: Date.now(),
+    });
+
+    // Call remoteSign method
+    const result = await sigma.remoteSign("http://localhost:21000", {
+      key: "Authorization",
+      value: "Bearer mockToken",
+    } as AuthToken);
+
+    console.log({ result });
+    // Check the result
+    assert.strictEqual(result.address, mockAddress);
+    assert.strictEqual(result.signature, mockSignature);
+    assert.strictEqual(sigma.verify(), true);
+    assert.strictEqual(sigma.sig?.address, mockAddress);
+    assert.strictEqual(sigma.sig?.signature, mockSignature);
   });
 });

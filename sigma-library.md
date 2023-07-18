@@ -80,6 +80,15 @@ If you sign a tx and the sign it a again the signature will be replaced. However
   sigma.sign(privateKey);
 ```
 
+### Remote Signatures
+
+This library supports using a remove key server such as starfish or tokenpass. use the `sigmaInstance.remoteSign(keyHost)` method to sign the message buffer using a remove key service instead of passing in a private key. This will take a second parameter, `authTokenHeader` object which will be forwarded as a header to the key server. This is useful if you need a signing server in the cloud.
+
+```javascript
+  const sigma = new Sigma(tx, 1, 2);
+  sigma.remoteSign("http://localhost:21000", "authToken");
+```
+
 ### Building the Library:
 
 To build the Sigma Protocol library yourself, follow these steps:

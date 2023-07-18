@@ -1,3 +1,4 @@
+import axios from "axios";
 import {
   BSM,
   Hash,
@@ -9,6 +10,18 @@ import {
   TxOut,
 } from "bsv-wasm";
 import { Buffer } from "buffer";
+export type AuthToken = {
+  type: "header" | "query";
+  value: string;
+  key: string;
+};
+
+export type RemoteSigningResponse = {
+  address: string;
+  sig: string;
+  message: string;
+  ts: number;
+};
 
 export const sigmaHex = "5349474d41";
 export enum Algorithm {
@@ -82,24 +95,8 @@ export class Sigma {
     return this._transaction;
   }
 
-  // Sign with Sigma protocol
-  // privateKey: a bsv-wasm PrivateKey
-  // inputs: either an array of TxIn from bsv-wasm or an array o string txids
-  //    must be in the same order they are added to the transaction
-  //    adding input txids to the signature scheme eliminates replay attacks
-  // dataHash: a sha256 hash of the data to be signed
-  //     it should include all the data in the output script prior to the "SIGMA" protocol instance
-  //     excluding the "|" protocol separator and "SIGMA" prefix itself
-  sign(privateKey: PrivateKey): SignResponse {
-    const message = this.getMessageHash();
+  _sign(signature: Signature, address: string) {
     const vin = this._refVin === -1 ? this._targetVout : this._refVin;
-
-    let signature = BSM.sign_message(privateKey, message.to_bytes());
-
-    const address = P2PKHAddress.from_pubkey(
-      privateKey.to_public_key()
-    ).to_string();
-
     const signedAsm = `${sigmaHex} ${Buffer.from(
       Algorithm.BSM,
       "utf-8"
@@ -157,6 +154,67 @@ export class Sigma {
       signedTx,
       ...this._sig,
     };
+  }
+  // Sign with Sigma protocol
+  // privateKey: a bsv-wasm PrivateKey
+  // inputs: either an array of TxIn from bsv-wasm or an array o string txids
+  //    must be in the same order they are added to the transaction
+  //    adding input txids to the signature scheme eliminates replay attacks
+  // dataHash: a sha256 hash of the data to be signed
+  //     it should include all the data in the output script prior to the "SIGMA" protocol instance
+  //     excluding the "|" protocol separator and "SIGMA" prefix itself
+  sign(privateKey: PrivateKey): SignResponse {
+    const message = this.getMessageHash();
+
+    let signature = BSM.sign_message(privateKey, message.to_bytes());
+
+    const address = P2PKHAddress.from_pubkey(
+      privateKey.to_public_key()
+    ).to_string();
+
+    return this._sign(signature, address);
+  }
+
+  async remoteSign(
+    keyHost: string,
+    authToken?: AuthToken
+  ): Promise<SignResponse> {
+    const headers = authToken
+      ? {
+          [authToken?.key]: authToken?.value,
+        }
+      : {};
+
+    try {
+      const response = await axios.post(
+        `${keyHost}/sign${
+          authToken?.type === "query"
+            ? "?" + authToken?.key + "=" + authToken?.value
+            : ""
+        }`,
+        {
+          message: this.getMessageHash().to_hex(),
+          encoding: "hex",
+        },
+        {
+          headers: {
+            ...headers,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+        }
+      );
+      const { address, message, sig } = response.data as RemoteSigningResponse;
+
+      const signature = Signature.from_compact_bytes(
+        Buffer.from(sig, "base64")
+      );
+      return this._sign(signature, address);
+    } catch (error: any) {
+      console.log(error);
+      // handle error
+      throw new Error(error.response);
+    }
   }
 
   verify = () => {
