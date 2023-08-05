@@ -243,7 +243,8 @@ describe("Sigma Protocol", () => {
     const result = await sigma.remoteSign("http://localhost:21000", {
       key: "Authorization",
       value: "Bearer mockToken",
-    } as AuthToken);
+      type: 'header'
+    });
 
     console.log({ result });
     // Check the result
