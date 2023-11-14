@@ -1,7 +1,11 @@
+---
+description: A digital signature scheme for signing Bitcoin transaction data.
+---
+
 # Sigma Library
 
-{% hint style="danger" %}
-This library is a work in progress and is not ready for production use. It is currently producing invalid signatures and verifications when bundled. We are investigating this transpilation / dependency issue and will publish a fix in the coming days.
+{% hint style="success" %}
+A Go version of this library is available at [github.com/bitcoinschema/go-sigma](https://github.com/bitcoinschema/go-sigma)
 {% endhint %}
 
 ### Library Usage
