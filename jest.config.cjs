@@ -9,5 +9,5 @@ module.exports = {
   transform: {
     "^.+\\.(ts|tsx)$": "ts-jest",
   },
-  transformIgnorePatterns: ["/node_modules/(?!got).+\\.js$"],
+  transformIgnorePatterns: ["/node_modules/(?!got|fetch-mock).+\\.js$"],
 };

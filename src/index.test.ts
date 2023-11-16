@@ -1,7 +1,37 @@
 import * as assert from "assert";
 import { PrivateKey, Script, Transaction, TxIn, TxOut } from "bsv-wasm";
-import nock from "nock"; // Import nock
-import { AuthToken, Sigma } from "./";
+import { Sigma } from "./";
+
+
+const mockAddress = "1ACLHVPVnB8AmLCyD5hPQtPCSCccjiUn7H";
+const mockMessage =
+  "234900c2e071fe9a8cc2a41a6b40d03bb3dac1475162996500b77149ab66bfd4";
+const mockSignature =
+"HxKekpndJQqQDQVAgH/SaInseYRfqtjde0eWZm+fkWc5CRnZ7ey1zJc7dssNb4I+OwcJPfTQLvUHwCxevFRP4HE=";
+
+// manually mocking fetch because all libraries are terrible and dont work with native fetch and/or jest
+beforeAll(() => {
+  global.fetch = jest.fn((url: string, options: RequestInit) => {
+    if (url.includes('http://localhost:21000/sign')) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          address: mockAddress,
+          sig: mockSignature,
+          message: mockMessage,
+          ts: Date.now(),
+        }),
+      });
+    }
+    // Handle other cases or throw an error
+    return Promise.reject(new Error('Unexpected URL'));
+  }) as any; // Using 'any' to bypass strict type checking here
+});
+
+afterAll(() => {
+  jest.restoreAllMocks();
+});
+
 
 describe("Sigma Protocol", () => {
   // Test data
@@ -225,25 +255,11 @@ describe("Sigma Protocol", () => {
 
     const sigma = new Sigma(tx, 0, 0);
 
-    const mockAddress = "1ACLHVPVnB8AmLCyD5hPQtPCSCccjiUn7H";
-    const mockMessage =
-      "234900c2e071fe9a8cc2a41a6b40d03bb3dac1475162996500b77149ab66bfd4";
-    const mockSignature =
-      "HxKekpndJQqQDQVAgH/SaInseYRfqtjde0eWZm+fkWc5CRnZ7ey1zJc7dssNb4I+OwcJPfTQLvUHwCxevFRP4HE=";
-
-    // Set up mock HTTP server
-    nock("http://localhost:21000").post("/sign").reply(200, {
-      address: mockAddress,
-      sig: mockSignature,
-      message: mockMessage,
-      ts: Date.now(),
-    });
-
     // Call remoteSign method
     const result = await sigma.remoteSign("http://localhost:21000", {
       key: "Authorization",
       value: "Bearer mockToken",
-      type: 'header'
+      type: "header",
     });
 
     console.log({ result });

@@ -1,4 +1,3 @@
-import axios from "axios";
 import {
   BSM,
   Hash,
@@ -174,49 +173,54 @@ export class Sigma {
 
     return this._sign(signature, address);
   }
-
-  async remoteSign(
-    keyHost: string,
-    authToken?: AuthToken
-  ): Promise<SignResponse> {
+  async remoteSign(keyHost: string, authToken?: AuthToken): Promise<SignResponse> {
     const headers = authToken
       ? {
-          [authToken?.key]: authToken?.value,
+          [authToken.key]: authToken.value,
         }
       : {};
-
+  
+    const url = `${keyHost}/sign${
+      authToken?.type === "query"
+        ? "?" + authToken?.key + "=" + authToken?.value
+        : ""
+    }`;
+  
+    const requestBody = {
+      message: this.getMessageHash().to_hex(),
+      encoding: "hex",
+    };
+  
     try {
-      const response = await axios.post(
-        `${keyHost}/sign${
-          authToken?.type === "query"
-            ? "?" + authToken?.key + "=" + authToken?.value
-            : ""
-        }`,
-        {
-          message: this.getMessageHash().to_hex(),
-          encoding: "hex",
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
         },
-        {
-          headers: {
-            ...headers,
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-        }
-      );
-      const { address, message, sig } = response.data as RemoteSigningResponse;
-
+        body: JSON.stringify(requestBody),
+      });
+  
+      if (!response.ok) {
+        const errorResponse = await response.text();
+        console.error('Response Error:', errorResponse);
+        throw new Error(`HTTP Error: ${response.status}`);
+      }
+  
+      const responseData = await response.json();
+      const { address, message, sig } = responseData;
+  
       const signature = Signature.from_compact_bytes(
         Buffer.from(sig, "base64")
       );
       return this._sign(signature, address);
-    } catch (error: any) {
-      console.log(error);
-      // handle error
-      throw new Error(error.response);
+    } catch (error) {
+      console.error('Fetch Error:', error);
+      throw error;
     }
   }
-
+  
   verify = () => {
     if (!this.sig) {
       throw new Error("No signature data provided");
