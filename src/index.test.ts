@@ -2,7 +2,6 @@ import * as assert from "assert";
 import { PrivateKey, Script, Transaction, TxIn, TxOut } from "bsv-wasm";
 import { Sigma } from "./";
 
-
 const mockAddress = "1ACLHVPVnB8AmLCyD5hPQtPCSCccjiUn7H";
 const mockMessage =
   "234900c2e071fe9a8cc2a41a6b40d03bb3dac1475162996500b77149ab66bfd4";
