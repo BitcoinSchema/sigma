@@ -22,8 +22,8 @@
     "testEnvironment": "node"
   },
   "dependencies": {
-    "@types/jest": "^29.5.1",
-    "bsv-wasm": "^2.1.1"
+    "@bsv/sdk": "^1.1.10",
+    "@types/jest": "^29.5.1"
   },
   "devDependencies": {
     "@babel/core": "^7.22.9",
