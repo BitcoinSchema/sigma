@@ -120,6 +120,7 @@ describe("Sigma Protocol", () => {
     const dataHash2 = toHex(sigma2.getDataHash());
     const messageHash2 = toHex(sigma2.getMessageHash());
 
+    console.log({ inputHash, inputHash2, dataHash, dataHash2, messageHash, messageHash2});
     assert.strictEqual(inputHash2, inputHash);
     assert.strictEqual(dataHash2, dataHash);
     assert.strictEqual(messageHash2, messageHash);

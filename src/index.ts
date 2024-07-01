@@ -149,7 +149,7 @@ export class Sigma {
     if (!(this._transaction instanceof Transaction)) {
       throw new Error(`Transaction must be provided ${this._transaction}`);
     }
-		const signedTx = Transaction.fromBinary(this._transaction.toBinary());
+    const signedTx = new Transaction(this._transaction.version, this._transaction.inputs, this._transaction.outputs);
 		const signedTxOut = {
 			satoshis: this.targetTxOut?.satoshis,
 			lockingScript: newScript,
@@ -264,9 +264,11 @@ export class Sigma {
 	private _getInputHashByVin = (vin: number): number[] => {
 		const txIn = this._transaction.inputs[vin];
 		if (txIn?.sourceTXID) {
-			const outpointBytes = Buffer.from(txIn.sourceTXID, "hex").reverse();
-			outpointBytes.writeUInt32LE(txIn.sourceOutputIndex, 0);
-			Hash.sha256(Array.from(outpointBytes));
+			const outpointBytes = Buffer.from(txIn.sourceTXID, "hex").reverse()
+			outpointBytes.writeUInt32LE(txIn.sourceOutputIndex, outpointBytes.length);
+      // const combined = Buffer.concat([outpointBytes, ]);
+      // console.log(combined.toString("hex"))
+			return Hash.sha256(Array.from(outpointBytes));
 		}
 		// using dummy hash
 		return Hash.sha256(Array.from(new Uint8Array(32)));
@@ -339,6 +341,7 @@ export class Sigma {
 	getSigInstanceCount(): number {
 		const existingAsm = this.targetTxOut?.lockingScript.toASM();
 		const scriptChunks: string[] = existingAsm?.split(" ") || [];
+    console.log(scriptChunks)
 		return scriptChunks.filter(
 			(chunk) => chunk.toUpperCase() === sigmaHex.toUpperCase(),
 		).length;
