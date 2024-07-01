@@ -48,16 +48,13 @@ describe("Sigma Protocol", () => {
     "utf-8"
   ).toString("hex")} ${Buffer.from("pushdata2", "utf-8").toString("hex")}`;
 
-  // const script = Script.fromASM(outputScriptAsm);
+  const script = Script.fromASM(outputScriptAsm);
   // Build a simple transaction with the output script
-  // const txOut = { satoshis: 0, lockingScript: script } as TransactionOutput;
+  const txOut = { satoshis: 0, lockingScript: script } as TransactionOutput;
 
-  // const tx = new Transaction(1, [], [txOut]);
 
   it("signs and verifies a message correctly", () => {
     // Create a new Sigma instance with the transaction and targetVout
-    const script = Script.fromASM(outputScriptAsm);
-    const txOut = { satoshis: 0, lockingScript: script } as TransactionOutput;
     const tx = new Transaction(1, [], [txOut]);
     const sigma = new Sigma(tx, 0, 0);
     // console.log({ messageHash: toHex(sigma.getMessageHash()) });
@@ -77,8 +74,6 @@ describe("Sigma Protocol", () => {
 
   it("generates a correct output script", () => {
     // Create a new Sigma instance with the transaction and targetVout
-    const script = Script.fromASM(outputScriptAsm);
-    const txOut = { satoshis: 0, lockingScript: script } as TransactionOutput;
     const tx = new Transaction(1, [], [txOut]);
     const sigma = new Sigma(tx, 0, 0);
 
@@ -100,8 +95,6 @@ describe("Sigma Protocol", () => {
 
   it("signed tx is verified", () => {
     // Create a new Sigma instance with the transaction and targetVout
-    const script = Script.fromASM(outputScriptAsm);
-    const txOut = { satoshis: 0, lockingScript: script } as TransactionOutput;
     const tx = new Transaction(1, [], [txOut]);
     const sigma = new Sigma(tx, 0, 0);
     // console.log({ messageHash: sigma.getMessageHash().to_hex() });
@@ -145,8 +138,6 @@ describe("Sigma Protocol", () => {
     // signature
 
     // Sign before adding inputs to create a dummy signature
-    const script = Script.fromASM(outputScriptAsm);
-    const txOut = { satoshis: 0, lockingScript: script } as TransactionOutput;
     const tx = new Transaction(1, [], [txOut]);
     const sigma = new Sigma(tx, 0, 0);
 
@@ -179,8 +170,6 @@ describe("Sigma Protocol", () => {
     // This is useful for calculating accurate fees considering the size of the
     // signature
 
-    const script = Script.fromASM(outputScriptAsm);
-    const txOut = { satoshis: 0, lockingScript: script } as TransactionOutput;
     const tx = new Transaction(1, [], [txOut]);
     // add some inputs
     const txIn = {
@@ -200,19 +189,14 @@ describe("Sigma Protocol", () => {
     tx.addInput(txIn2);
 
     const sigma = new Sigma(tx, 0, 0, 1);
-
     // sign again now that inputs have been added
     sigma.sign(privateKey);
-
-
     assert.strictEqual(sigma.verify(), true);
   });
 
   it("create a user and platform signature on the same output", () => {
     // This is useful for calculating accurate fees
     // considering the size of the signature
-    const script = Script.fromASM(outputScriptAsm);
-    const txOut = { satoshis: 0, lockingScript: script } as TransactionOutput;
     const tx = new Transaction(1, [], [txOut]);
     const sigma = new Sigma(tx, 0, 0);
 
