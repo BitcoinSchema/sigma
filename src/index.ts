@@ -10,6 +10,7 @@ import {
 	PublicKey,
 } from "@bsv/sdk";
 import { Utils } from "@bsv/sdk";
+import { createHash } from "crypto";
 const {
 	toHex,
 } = Utils
@@ -91,7 +92,7 @@ export class Sigma {
 		const combinedHashes = new Uint8Array(inputBytes.length + dataBytes.length);
 		combinedHashes.set(inputBytes, 0);
 		combinedHashes.set(dataBytes, inputBytes.length);
-		console.log("combinedHashes", Buffer.from(combinedHashes).toString('hex'))
+		// console.log("combinedHashes", Buffer.from(combinedHashes).toString('hex'))
 		return Hash.sha256(Array.from(combinedHashes));
 	}
 
@@ -243,11 +244,6 @@ export class Sigma {
 			try {
 				publicKey = signature.RecoverPublicKey(recovery, new BigNumber(BSM.magicHash(msgHash)))
 				const sigFitsPubkey = BSM.verify(msgHash, signature, publicKey);
-				console.log({
-					sigFitsPubkey,
-					sigAddress: publicKey.toAddress(),
-					targetAddress: this.sig.address
-				})
 				if (sigFitsPubkey && publicKey.toAddress() === this.sig.address) {
 					return true
 				}
@@ -256,19 +252,6 @@ export class Sigma {
 			}
 		}
 		return false
-		// const publicKey = PublicKey.fromMsgHashAndCompactSignature(
-		// 	new BigNumber(BSM.magicHash(msgHash)),
-		// 	this.sig.signature,
-		//   "base64",
-		// );
-
-		// const sigFitsPubkey = BSM.verify(msgHash, signature, publicKey);
-		// console.log({
-		//   sigFitsPubkey,
-		//   sigAddress: publicKey.toAddress(),
-		//   targetAddress: this.sig.address
-		// })
-		// return sigFitsPubkey && publicKey.toAddress() === this.sig.address;
 	};
 
 	getInputHash = (): number[] => {
@@ -284,17 +267,13 @@ export class Sigma {
 		const txIn = this._transaction.inputs[vin];
 		if (txIn?.sourceTXID) {
 			const outpointBytes = Buffer.alloc(36)
-			const txidBuf = Buffer.from(txIn.sourceTXID, 'hex').reverse()
+			const txidBuf = Buffer.from(txIn.sourceTXID, 'hex')
 			outpointBytes.set(txidBuf, 0)
 			outpointBytes.writeUInt32LE(txIn.sourceOutputIndex, 32)
-			const hash = Hash.sha256(Array.from(outpointBytes));
-			console.log("outpointBytes", outpointBytes.toString('hex'), "hash", Buffer.from(hash).toString('hex'))
-			return hash
+			return Hash.sha256(Array.from(outpointBytes));
 		}
 		// using dummy hash
-		const hash = Hash.sha256(Array.from(new Uint8Array(32)));
-		console.log("outpointBytes", 0, "hash", Buffer.from(hash).toString('hex'))
-		return hash
+		return Hash.sha256(Array.from(new Uint8Array(32)));
 	};
 
 	// gets the Hash.sha256 for a given sigma instance within an output script
@@ -317,9 +296,7 @@ export class Sigma {
 					// or "|" separator which is not signed
 					const dataChunks = scriptChunks.slice(0, i - 1);
 					const dataScript = Script.fromASM(dataChunks.join(" "));
-					const hash = Hash.sha256(dataScript.toBinary());
-					console.log("dataChunks", dataChunks, "hash", Buffer.from(hash).toString('hex'))
-					return hash
+					return Hash.sha256(dataScript.toBinary());
 				}
 				occurances++;
 			}
@@ -327,9 +304,7 @@ export class Sigma {
 
 		// If no endIndex found, return the hash for the entire script
 		const dataScript = Script.fromASM(scriptChunks.join(" "));
-		const hash = Hash.sha256(dataScript.toBinary());
-		console.log("dataChunks", scriptChunks, "hash", Buffer.from(hash).toString('hex'))
-		return hash
+		return Hash.sha256(dataScript.toBinary());
 	};
 
 	get targetTxOut(): TransactionOutput | null {
