@@ -7,10 +7,10 @@ import {
 	Transaction,
 	type TransactionOutput,
 	BigNumber,
-	PublicKey,
+	type PublicKey,
 } from "@bsv/sdk";
 import { Utils } from "@bsv/sdk";
-import { createHash } from "crypto";
+
 const {
 	toHex,
 } = Utils
@@ -249,7 +249,7 @@ export class Sigma {
 					return true
 				}
 			} catch (e) {
-				continue
+        // try next recovery
 			}
 		}
 		return false

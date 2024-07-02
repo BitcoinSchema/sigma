@@ -26,7 +26,7 @@ beforeAll(() => {
     }
     // Handle other cases or throw an error
     return Promise.reject(new Error('Unexpected URL'));
-  }) as any; // Using 'any' to bypass strict type checking here
+  }) as jest.Mock
 });
 
 afterAll(() => {
