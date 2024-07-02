@@ -101,6 +101,7 @@ export class Sigma {
 
 	_sign(signature: Signature, address: string) {
 		const vin = this._refVin === -1 ? this._targetVout : this._refVin;
+
 		const signedAsm = `${sigmaHex} ${Buffer.from(
 			Algorithm.BSM,
 			"utf-8",
