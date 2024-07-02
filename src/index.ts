@@ -167,8 +167,8 @@ export class Sigma {
 		};
 	}
 	// Sign with Sigma protocol
-	// privateKey: a bsv-wasm PrivateKey
-	// inputs: either an array of TxIn from bsv-wasm or an array o string txids
+	// privateKey: a @bsv/ts-sdk PrivateKey
+	// inputs: either an array of TxIn from @bsv/ts-sdk or an array o string txids
 	//    must be in the same order they are added to the transaction
 	//    adding input txids to the signature scheme eliminates replay attacks
 	// dataHash: a sha256 hash of the data to be signed
@@ -238,22 +238,38 @@ export class Sigma {
 			throw new Error("No tx data provided");
 		}
 
+		const signature = Signature.fromCompact(this.sig.signature, "base64");    
+    let publicKey: PublicKey | undefined
+    for (let recovery = 0; recovery < 4; recovery++) {
+      try {
+        publicKey = signature.RecoverPublicKey(recovery, new BigNumber(BSM.magicHash(msgHash)))
+        const sigFitsPubkey = BSM.verify(msgHash, signature, publicKey);
+        console.log({
+          sigFitsPubkey,
+          sigAddress: publicKey.toAddress(),
+          targetAddress: this.sig.address
+        })
+        if (sigFitsPubkey && publicKey.toAddress() === this.sig.address) {
+          return true
+        }
+      } catch (e) {
+        continue
+      }
+    }
+    return false
+		// const publicKey = PublicKey.fromMsgHashAndCompactSignature(
+		// 	new BigNumber(BSM.magicHash(msgHash)),
+		// 	this.sig.signature,
+    //   "base64",
+		// );
 
-		const signature = Signature.fromCompact(this.sig.signature, "base64");
-		const publicKey = PublicKey.fromMsgHashAndCompactSignature(
-			new BigNumber(BSM.magicHash(this.getMessageHash())),
-			this.sig.signature,
-      "base64",
-		);
-    // const recovery = signature.CalculateRecoveryFactor(publicKey, msgHash)
-
-		const sigFitsPubkey = BSM.verify(msgHash, signature, publicKey);
-    console.log({
-      sigFitsPubkey,
-      sigAddress: publicKey.toAddress(),
-      targetAddress: this.sig.address
-    })
-		return sigFitsPubkey && publicKey.toAddress() === this.sig.address;
+		// const sigFitsPubkey = BSM.verify(msgHash, signature, publicKey);
+    // console.log({
+    //   sigFitsPubkey,
+    //   sigAddress: publicKey.toAddress(),
+    //   targetAddress: this.sig.address
+    // })
+		// return sigFitsPubkey && publicKey.toAddress() === this.sig.address;
 	};
 
 	getInputHash = (): number[] => {
@@ -268,7 +284,6 @@ export class Sigma {
 	private _getInputHashByVin = (vin: number): number[] => {
 		const txIn = this._transaction.inputs[vin];
 		if (txIn?.sourceTXID) {
-      
       const outpointBytes = Buffer.alloc(36)
       const txidBuf = Buffer.from(txIn.sourceTXID, 'hex').reverse()
       outpointBytes.set(txidBuf, 0)
