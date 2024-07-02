@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "description": "A secure signature protocol for Bitcoin transactions.",
   "main": "dist/index.cjs",
-  "repository": "https://github.com/BitcoinSchema/sigma",
+  "repository": {
+    "url": "git+https://github.com/BitcoinSchema/sigma.git"
+  },
   "author": "Luke Rohenaz",
   "license": "MIT",
   "module": "dist/index.module.js",
