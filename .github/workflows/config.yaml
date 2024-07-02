@@ -3,10 +3,10 @@ name: CI
 on:
   push:
     branches:
-      - feature/ts-sdk
+      - feature/master
   pull_request:
     branches:
-      - feature/ts-sdk
+      - feature/master
 
 jobs:
   build:
