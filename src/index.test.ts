@@ -56,18 +56,14 @@ describe("Sigma Protocol", () => {
     // Create a new Sigma instance with the transaction and targetVout
     const tx = new Transaction(1, [], [txOut]);
     const sigma = new Sigma(tx, 0, 0);
-    // console.log({ messageHash: toHex(sigma.getMessageHash()) });
     // Sign the message
     const { sigmaScript, address, signature, signedTx } =
       sigma.sign(privateKey);
 
-    console.log({ address, signature, signedTx });
-    // console.log({ sigmaScript: sigmaScript.to_asm_string() });
 
     // Verify the signature
     const isValid = sigma.verify();
 
-    // console.log("Signature is valid:", isValid);
     assert.strictEqual(isValid, true);
   });
 
@@ -87,7 +83,6 @@ describe("Sigma Protocol", () => {
       .outputs[0]
       ?.lockingScript
       .toASM();
-    // console.log({ asmAfter });
 
     assert.notEqual(asmAfter, asm);
   });
@@ -96,10 +91,8 @@ describe("Sigma Protocol", () => {
     // Create a new Sigma instance with the transaction and targetVout
     const tx = new Transaction(1, [], [txOut]);
     const sigma = new Sigma(tx, 0, 0);
-    // console.log({ messageHash: sigma.getMessageHash().to_hex() });
 
     // ... Before signing
-
     // console.log({ inputHashBeforeSigning: sigma.getInputHash().to_hex() });
     // console.log({ dataHashBeforeSigning: sigma.getDataHash().to_hex() });
 
@@ -121,7 +114,6 @@ describe("Sigma Protocol", () => {
     const dataHash2 = toHex(sigma2.getDataHash());
     const messageHash2 = toHex(sigma2.getMessageHash());
 
-    console.log({ inputHash, inputHash2, dataHash, dataHash2, messageHash, messageHash2});
     assert.strictEqual(inputHash2, inputHash);
     assert.strictEqual(dataHash2, dataHash);
     assert.strictEqual(messageHash2, messageHash);
@@ -259,7 +251,6 @@ describe("Sigma Protocol", () => {
       type: "header",
     });
 
-    console.log({ result });
     // Check the result
     assert.strictEqual(result.address, mockAddress);
     assert.strictEqual(result.signature, mockSignature);
