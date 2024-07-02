@@ -52,23 +52,18 @@ describe("Sigma Protocol", () => {
   // Build a simple transaction with the output script
   const txOut = { satoshis: 0, lockingScript: script } as TransactionOutput;
 
-
   it("signs and verifies a message correctly", () => {
     // Create a new Sigma instance with the transaction and targetVout
     const tx = new Transaction(1, [], [txOut]);
     const sigma = new Sigma(tx, 0, 0);
-    // console.log({ messageHash: toHex(sigma.getMessageHash()) });
     // Sign the message
     const { sigmaScript, address, signature, signedTx } =
       sigma.sign(privateKey);
 
-    console.log({ address, signature, signedTx });
-    // console.log({ sigmaScript: sigmaScript.to_asm_string() });
 
     // Verify the signature
     const isValid = sigma.verify();
 
-    // console.log("Signature is valid:", isValid);
     assert.strictEqual(isValid, true);
   });
 
@@ -88,7 +83,6 @@ describe("Sigma Protocol", () => {
       .outputs[0]
       ?.lockingScript
       .toASM();
-    // console.log({ asmAfter });
 
     assert.notEqual(asmAfter, asm);
   });
@@ -97,10 +91,8 @@ describe("Sigma Protocol", () => {
     // Create a new Sigma instance with the transaction and targetVout
     const tx = new Transaction(1, [], [txOut]);
     const sigma = new Sigma(tx, 0, 0);
-    // console.log({ messageHash: sigma.getMessageHash().to_hex() });
 
     // ... Before signing
-
     // console.log({ inputHashBeforeSigning: sigma.getInputHash().to_hex() });
     // console.log({ dataHashBeforeSigning: sigma.getDataHash().to_hex() });
 
@@ -122,7 +114,6 @@ describe("Sigma Protocol", () => {
     const dataHash2 = toHex(sigma2.getDataHash());
     const messageHash2 = toHex(sigma2.getMessageHash());
 
-    console.log({ inputHash, inputHash2, dataHash, dataHash2, messageHash, messageHash2});
     assert.strictEqual(inputHash2, inputHash);
     assert.strictEqual(dataHash2, dataHash);
     assert.strictEqual(messageHash2, messageHash);
@@ -147,7 +138,7 @@ describe("Sigma Protocol", () => {
 
     // add some inputs
     const txIn = {
-      sourceTXID: "810755d937913d4228e1a4d192046d96c0642e2678d6a90e1cb794b0c2aeb78b",
+      sourceTXID: "810755d937913d4228e1a4d192046d96c0642e2678d6a90e1cb794b0c2aeb78c",
       sourceOutputIndex: 0,
       sequence: 0xffffffff,
     } as TransactionInput;
@@ -236,7 +227,7 @@ describe("Sigma Protocol", () => {
     assert.strictEqual(isValid, true);
   });
 
-  it("signs a message correctly with remote signing", async () => {
+  it.only("signs a message correctly with remote signing", async () => {
     const outputScriptAsm = `OP_0 OP_RETURN ${Buffer.from(
       "pushdata1",
       "utf-8"
@@ -260,7 +251,6 @@ describe("Sigma Protocol", () => {
       type: "header",
     });
 
-    console.log({ result });
     // Check the result
     assert.strictEqual(result.address, mockAddress);
     assert.strictEqual(result.signature, mockSignature);

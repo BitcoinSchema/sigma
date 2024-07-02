@@ -10,7 +10,8 @@ import {
 	PublicKey,
 } from "@bsv/sdk";
 import { Utils } from "@bsv/sdk";
-const  {
+import { createHash } from "crypto";
+const {
 	toHex,
 } = Utils
 
@@ -91,7 +92,7 @@ export class Sigma {
 		const combinedHashes = new Uint8Array(inputBytes.length + dataBytes.length);
 		combinedHashes.set(inputBytes, 0);
 		combinedHashes.set(dataBytes, inputBytes.length);
-
+		// console.log("combinedHashes", Buffer.from(combinedHashes).toString('hex'))
 		return Hash.sha256(Array.from(combinedHashes));
 	}
 
@@ -147,11 +148,11 @@ export class Sigma {
 		newScriptAsm = `${existingAsm} ${separator} ${signedAsm}`;
 
 		const newScript = Script.fromASM(newScriptAsm);
-    const signedTx = new Transaction(
-      this._transaction.version, 
-      this._transaction.inputs.map(i => ({...i})), 
-      this._transaction.outputs.map(o => ({...o}))
-    );
+		const signedTx = new Transaction(
+			this._transaction.version,
+			this._transaction.inputs.map(i => ({ ...i })),
+			this._transaction.outputs.map(o => ({ ...o }))
+		);
 		const signedTxOut = {
 			satoshis: this.targetTxOut?.satoshis,
 			lockingScript: newScript,
@@ -168,8 +169,8 @@ export class Sigma {
 		};
 	}
 	// Sign with Sigma protocol
-	// privateKey: a bsv-wasm PrivateKey
-	// inputs: either an array of TxIn from bsv-wasm or an array o string txids
+	// privateKey: a @bsv/ts-sdk PrivateKey
+	// inputs: either an array of TxIn from @bsv/ts-sdk or an array o string txids
 	//    must be in the same order they are added to the transaction
 	//    adding input txids to the signature scheme eliminates replay attacks
 	// dataHash: a sha256 hash of the data to be signed
@@ -187,15 +188,14 @@ export class Sigma {
 	): Promise<SignResponse> {
 		const headers = authToken
 			? {
-					[authToken.key]: authToken.value,
-				}
+				[authToken.key]: authToken.value,
+			}
 			: {};
 
-		const url = `${keyHost}/sign${
-			authToken?.type === "query"
+		const url = `${keyHost}/sign${authToken?.type === "query"
 				? `?${authToken?.key}=${authToken?.value}`
 				: ""
-		}`;
+			}`;
 
 		const requestBody = {
 			message: toHex(this.getMessageHash()),
@@ -234,27 +234,25 @@ export class Sigma {
 		if (!this.sig) {
 			throw new Error("No signature data provided");
 		}
-    const msgHash = this.getMessageHash()
+		const msgHash = this.getMessageHash()
 		if (!msgHash) {
 			throw new Error("No tx data provided");
 		}
 
-
 		const signature = Signature.fromCompact(this.sig.signature, "base64");
-		const publicKey = PublicKey.fromMsgHashAndCompactSignature(
-			new BigNumber(BSM.magicHash(this.getMessageHash())),
-			this.sig.signature,
-      "base64",
-		);
-    // const recovery = signature.CalculateRecoveryFactor(publicKey, msgHash)
-
-		const sigFitsPubkey = BSM.verify(msgHash, signature, publicKey);
-    console.log({
-      sigFitsPubkey,
-      sigAddress: publicKey.toAddress(),
-      targetAddress: this.sig.address
-    })
-		return sigFitsPubkey && publicKey.toAddress() === this.sig.address;
+		let publicKey: PublicKey | undefined
+		for (let recovery = 0; recovery < 4; recovery++) {
+			try {
+				publicKey = signature.RecoverPublicKey(recovery, new BigNumber(BSM.magicHash(msgHash)))
+				const sigFitsPubkey = BSM.verify(msgHash, signature, publicKey);
+				if (sigFitsPubkey && publicKey.toAddress() === this.sig.address) {
+					return true
+				}
+			} catch (e) {
+				continue
+			}
+		}
+		return false
 	};
 
 	getInputHash = (): number[] => {
@@ -269,11 +267,10 @@ export class Sigma {
 	private _getInputHashByVin = (vin: number): number[] => {
 		const txIn = this._transaction.inputs[vin];
 		if (txIn?.sourceTXID) {
-      
-      const outpointBytes = Buffer.alloc(36)
-      const txidBuf = Buffer.from(txIn.sourceTXID, 'hex').reverse()
-      outpointBytes.set(txidBuf, 0)
-      outpointBytes.writeUInt32LE(txIn.sourceOutputIndex, 32)
+			const outpointBytes = Buffer.alloc(36)
+			const txidBuf = Buffer.from(txIn.sourceTXID, 'hex')
+			outpointBytes.set(txidBuf, 0)
+			outpointBytes.writeUInt32LE(txIn.sourceOutputIndex, 32)
 			return Hash.sha256(Array.from(outpointBytes));
 		}
 		// using dummy hash
