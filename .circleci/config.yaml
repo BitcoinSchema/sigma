@@ -20,4 +20,3 @@ workflows:
   build_and_deploy:
     jobs:
       - build_and_test
-

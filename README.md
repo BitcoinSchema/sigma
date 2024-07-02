@@ -40,4 +40,4 @@ Here's a brief explanation of the fields:
 * `Signing Algorithm`: The algorithm used for signing, in this case, "ECDSA" for Standard ECDSA Message Signing using SHA256 as the digest. No other algorithms are currently supported by the library.
 * `Signing Address`: The P2PKH address derived from the public key of the signer. If using Bitcoin Attestation Protocol to sign with an existing on-chain identity, this should be derived from your current signing key.
 * `Signature`: The Sigma signature generated using the private key corresponding to the signing address. You will see the signature in hex format in Bitcoin scripts, but the library will return this field in Base64 format for the sake of consistency with other signing schemes.
-* `VIN` : The input to reference by index. The txid of this input will be incorporated into the signature. If a -1 is specified, it indicated the corresponding input will be signed.
+* `VIN` : The input to reference by index. The txid of this input will be incorporated into the signature. If a -1 is specified, it indicates the corresponding input will be signed.
