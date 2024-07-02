@@ -227,7 +227,7 @@ describe("Sigma Protocol", () => {
     assert.strictEqual(isValid, true);
   });
 
-  it.only("signs a message correctly with remote signing", async () => {
+  it("signs a message correctly with remote signing", async () => {
     const outputScriptAsm = `OP_0 OP_RETURN ${Buffer.from(
       "pushdata1",
       "utf-8"
