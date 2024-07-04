@@ -1,6 +1,6 @@
 {
   "name": "sigma-protocol",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A secure signature protocol for Bitcoin transactions.",
   "main": "dist/index.cjs",
   "repository": {
@@ -24,7 +24,7 @@
     "testEnvironment": "node"
   },
   "dependencies": {
-    "@bsv/sdk": "^1.1.11",
+    "@bsv/sdk": "^1.1.12",
     "@types/jest": "^29.5.1"
   },
   "devDependencies": {
