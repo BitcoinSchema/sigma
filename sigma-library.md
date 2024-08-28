@@ -12,10 +12,10 @@ A Go version of this library is available at [github.com/bitcoinschema/go-sigma]
 
 To use the Sigma Protocol library, follow the instructions below:
 
-1. Install the library using npm:
+1. Install the library and peer dependency using npm / yarn / bun:
 
 ```bash
-yarn add sigma-protocol
+bun add sigma-protocol @bsv/sdk
 ```
 
 2. You can use the `verify` method to check a signature:
