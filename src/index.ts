@@ -7,7 +7,6 @@ import {
 	Transaction,
 	type TransactionOutput,
 	BigNumber,
-	type PublicKey,
 } from "@bsv/sdk";
 import { Utils } from "@bsv/sdk";
 const { magicHash } = BSM;
@@ -247,19 +246,8 @@ export class Sigma {
 		}
 
 		const signature = Signature.fromCompact(this.sig.signature, "base64");
-		let publicKey: PublicKey | undefined
-		for (let recovery = 0; recovery < 4; recovery++) {
-			try {
-				publicKey = signature.RecoverPublicKey(recovery, new BigNumber(magicHash(msgHash)))
-				const sigFitsPubkey = BSM.verify(msgHash, signature, publicKey);
-				if (sigFitsPubkey && publicKey.toAddress() === this.sig.address) {
-					return true
-				}
-			} catch (e) {
-        // try next recovery
-			}
-		}
-		return false
+    const recovery = deduceRecovery(signature, msgHash, this.sig.address)
+		return recovery !== -1
 	};
 
 	getInputHash = (): number[] => {
@@ -366,10 +354,11 @@ export class Sigma {
 }
 
 
+// Deduce the recovery factor for a given signature, returns -1 if recovery is not possible
 const deduceRecovery = (signature: Signature, message: number[], address: string): number => {
   for (let recovery = 0; recovery < 4; recovery++) {
     try {
-      const publicKey = signature.RecoverPublicKey(recovery, new BigNumber(magicHash(msgHash)))
+      const publicKey = signature.RecoverPublicKey(recovery, new BigNumber(magicHash(message)))
       const sigFitsPubkey = BSM.verify(message, signature, publicKey);
       if (sigFitsPubkey && publicKey.toAddress() === address) {
         return recovery
@@ -378,4 +367,5 @@ const deduceRecovery = (signature: Signature, message: number[], address: string
       // try next recovery
     }
   }
+  return -1
 }
