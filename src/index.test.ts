@@ -9,6 +9,7 @@ const mockMessage =
   "234900c2e071fe9a8cc2a41a6b40d03bb3dac1475162996500b77149ab66bfd4";
 const mockSignature =
 "HxKekpndJQqQDQVAgH/SaInseYRfqtjde0eWZm+fkWc5CRnZ7ey1zJc7dssNb4I+OwcJPfTQLvUHwCxevFRP4HE=";
+const mockRecovery = 0;
 
 // manually mocking fetch because all libraries are terrible and dont work with native fetch and/or jest
 beforeAll(() => {
@@ -20,6 +21,7 @@ beforeAll(() => {
           address: mockAddress,
           sig: mockSignature,
           message: mockMessage,
+          recovery: mockRecovery,
           ts: Date.now(),
         }),
       });

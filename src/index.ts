@@ -7,12 +7,12 @@ import {
 	Transaction,
 	type TransactionOutput,
 	BigNumber,
-	type PublicKey,
 } from "@bsv/sdk";
 import { Utils } from "@bsv/sdk";
-
+const { magicHash } = BSM;
 const {
 	toHex,
+  toArray
 } = Utils
 
 export type AuthToken = {
@@ -26,6 +26,7 @@ export type RemoteSigningResponse = {
 	sig: string;
 	message: string;
 	ts: number;
+  recovery: number;
 };
 
 export const sigmaHex = "5349474d41";
@@ -100,15 +101,17 @@ export class Sigma {
 		return this._transaction;
 	}
 
-	_sign(signature: Signature, address: string) {
+	_sign(signature: Signature, address: string, recovery: number) {
 		const vin = this._refVin === -1 ? this._targetVout : this._refVin;
-
+    if (recovery === undefined) {
+      throw new Error("Failed recovery missing")
+    }
 		const signedAsm = `${sigmaHex} ${Buffer.from(
 			Algorithm.BSM,
 			"utf-8",
 		).toString("hex")} ${Buffer.from(address, "utf-8").toString(
 			"hex",
-		)} ${signature.toCompact(0, true, "hex")} ${Buffer.from(
+		)} ${signature.toCompact(recovery, true, "hex")} ${Buffer.from(
 			vin.toString(),
 			"utf-8",
 		).toString("hex")}`;
@@ -118,7 +121,7 @@ export class Sigma {
 		this._sig = {
 			algorithm: Algorithm.BSM,
 			address: address,
-			signature: signature.toCompact(0, true, "base64") as string,
+			signature: signature.toCompact(recovery, true, "base64") as string,
 			vin,
 			targetVout: this._targetVout,
 		};
@@ -180,7 +183,10 @@ export class Sigma {
 		const message = this.getMessageHash();
 		const signature = BSM.sign(message, privateKey);
 		const address = privateKey.toAddress();
-		return this._sign(signature, address);
+
+    const h = new BigNumber(magicHash(message))
+    const recovery = signature.CalculateRecoveryFactor(privateKey.toPublicKey(), h)
+		return this._sign(signature, address, recovery);
 	}
 	async remoteSign(
 		keyHost: string,
@@ -219,11 +225,11 @@ export class Sigma {
 				throw new Error(`HTTP Error: ${response.status}`);
 			}
 
-			const responseData = await response.json();
-			const { address, message, sig } = responseData;
-
+			const responseData = await response.json() as RemoteSigningResponse
+			const { address, message, sig, recovery } = responseData;
 			const signature = Signature.fromCompact(sig, "base64");
-			return this._sign(signature, address);
+
+			return this._sign(signature, address, recovery);
 		} catch (error) {
 			console.error("Fetch Error:", error);
 			throw error;
@@ -240,19 +246,8 @@ export class Sigma {
 		}
 
 		const signature = Signature.fromCompact(this.sig.signature, "base64");
-		let publicKey: PublicKey | undefined
-		for (let recovery = 0; recovery < 4; recovery++) {
-			try {
-				publicKey = signature.RecoverPublicKey(recovery, new BigNumber(BSM.magicHash(msgHash)))
-				const sigFitsPubkey = BSM.verify(msgHash, signature, publicKey);
-				if (sigFitsPubkey && publicKey.toAddress() === this.sig.address) {
-					return true
-				}
-			} catch (e) {
-        // try next recovery
-			}
-		}
-		return false
+    const recovery = deduceRecovery(signature, msgHash, this.sig.address)
+		return recovery !== -1
 	};
 
 	getInputHash = (): number[] => {
@@ -356,4 +351,21 @@ export class Sigma {
 			(chunk) => chunk.toUpperCase() === sigmaHex.toUpperCase(),
 		);
 	}
+}
+
+
+// Deduce the recovery factor for a given signature, returns -1 if recovery is not possible
+const deduceRecovery = (signature: Signature, message: number[], address: string): number => {
+  for (let recovery = 0; recovery < 4; recovery++) {
+    try {
+      const publicKey = signature.RecoverPublicKey(recovery, new BigNumber(magicHash(message)))
+      const sigFitsPubkey = BSM.verify(message, signature, publicKey);
+      if (sigFitsPubkey && publicKey.toAddress() === address) {
+        return recovery
+      }
+    } catch (e) {
+      // try next recovery
+    }
+  }
+  return -1
 }
