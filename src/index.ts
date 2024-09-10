@@ -181,7 +181,7 @@ export class Sigma {
 	//     excluding the "|" protocol separator and "SIGMA" prefix itself
 	sign(privateKey: PrivateKey): SignResponse {
 		const message = this.getMessageHash();
-		const signature = BSM.sign(message, privateKey);
+		const signature = BSM.sign(message, privateKey, 'raw') as Signature;
 		const address = privateKey.toAddress();
 
     const h = new BigNumber(magicHash(message))
