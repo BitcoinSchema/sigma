@@ -2,8 +2,10 @@ import {
 	BSM,
 	Hash,
 	type PrivateKey,
+	type PublicKey,
 	Script,
 	Signature,
+	SignedMessage,
 	Transaction,
 	type TransactionOutput,
 	BigNumber,
@@ -53,6 +55,7 @@ export type RemoteSigningResponse = {
 
 export enum Algorithm {
 	BSM = "BSM",
+	BRC77 = "BRC77",
 }
 
 export type Sig = {
@@ -220,6 +223,7 @@ export class Sigma {
 
 	setSigmaInstance = (sigmaInstance: number) => {
 		this._sigmaInstance = sigmaInstance;
+		this.setHashes();
 	};
 
 	getMessageHash(): number[] {
@@ -239,86 +243,108 @@ export class Sigma {
 		return this._transaction;
 	}
 
-	_sign(signature: Signature, address: string, recovery: number) {
-		const vin = this._refVin === -1 ? this._targetVout : this._refVin;
-		if (recovery === undefined) {
-			throw new Error("Failed recovery missing");
-		}
-
-		// Build SIGMA script using chunks
-		const signedAsm = `${sigmaHex} ${toHex(toArray(Algorithm.BSM))} ${toHex(toArray(address))} ${signature.toCompact(recovery, true, "hex")} ${toHex(toArray(vin.toString()))}`;
-
+	/**
+	 * Apply signature to transaction and update state
+	 * Common logic for both BSM and BRC-77 signing
+	 */
+	private _applySignature(signedAsm: string, sig: Sig): SignResponse {
 		const sigmaScript = Script.fromASM(signedAsm);
-
-		this._sig = {
-			algorithm: Algorithm.BSM,
-			address: address,
-			signature: signature.toCompact(recovery, true, "base64") as string,
-			vin,
-			targetVout: this._targetVout,
-		};
+		this._sig = sig;
 
 		let existingAsm = this.targetTxOut?.lockingScript.toASM();
 		const containsOpReturn = existingAsm?.split(" ").includes("OP_RETURN");
 		const separator = containsOpReturn ? "7c" : "OP_RETURN";
 
-		let newScriptAsm = "";
-
 		const existingSig = this.sig;
-
-		// sigmaIndex is 0 based while count is 1 based
 		if (existingSig && this._sigmaInstance === this.getSigInstanceCount()) {
-			// Replace the existing signature
 			const scriptChunks = existingAsm?.split(" ") || [];
 			const sigIndex = this.getSigInstancePosition();
-
-			const newSignedAsmChunks = signedAsm.split(" ");
 			if (sigIndex !== -1) {
-				existingAsm = scriptChunks
-					.splice(sigIndex, 5, ...newSignedAsmChunks)
-					.join("");
+				scriptChunks.splice(sigIndex, 5, ...signedAsm.split(" "));
+				existingAsm = scriptChunks.join(" ");
 			}
 		}
-		// Append the new signature
-		newScriptAsm = `${existingAsm} ${separator} ${signedAsm}`;
 
+		const newScriptAsm = `${existingAsm} ${separator} ${signedAsm}`;
 		const newScript = Script.fromASM(newScriptAsm);
+
 		const signedTx = new Transaction(
 			this._transaction.version,
 			this._transaction.inputs.map((i) => ({ ...i })),
 			this._transaction.outputs.map((o) => ({ ...o })),
 		);
-		const signedTxOut = {
+		signedTx.outputs[this._targetVout] = {
 			satoshis: this.targetTxOut?.satoshis,
 			lockingScript: newScript,
 		} as TransactionOutput;
-		signedTx.outputs[this._targetVout] = signedTxOut;
 
-		// update the object state
 		this._transaction = signedTx;
 
-		return {
-			sigmaScript,
-			signedTx,
-			...this._sig,
+		return { sigmaScript, signedTx, ...this._sig };
+	}
+
+	/**
+	 * Sign with BSM (internal)
+	 */
+	_sign(signature: Signature, address: string, recovery: number): SignResponse {
+		if (recovery === undefined) {
+			throw new Error("Failed recovery missing");
+		}
+
+		const vin = this._refVin === -1 ? this._targetVout : this._refVin;
+		const signedAsm = `${sigmaHex} ${toHex(toArray(Algorithm.BSM))} ${toHex(toArray(address))} ${signature.toCompact(recovery, true, "hex")} ${toHex(toArray(vin.toString()))}`;
+
+		const sig: Sig = {
+			algorithm: Algorithm.BSM,
+			address,
+			signature: signature.toCompact(recovery, true, "base64") as string,
+			vin,
+			targetVout: this._targetVout,
 		};
+
+		return this._applySignature(signedAsm, sig);
 	}
 
 	/**
 	 * Sign with Sigma protocol
 	 * @param privateKey - a @bsv/sdk PrivateKey
+	 * @param algorithm - signing algorithm (default: BSM)
+	 * @param verifier - for BRC77, optional public key of specific verifier (omit for anyone-can-verify)
 	 */
-	sign(privateKey: PrivateKey): SignResponse {
+	sign(privateKey: PrivateKey, algorithm: Algorithm = Algorithm.BSM, verifier?: PublicKey): SignResponse {
 		const message = this.getMessageHash();
+
+		if (algorithm === Algorithm.BRC77) {
+			return this._signBRC77(message, privateKey, verifier);
+		}
+
 		const signature = BSM.sign(message, privateKey, "raw") as Signature;
 		const address = privateKey.toAddress();
-
 		const h = new BigNumber(magicHash(message));
-		const recovery = signature.CalculateRecoveryFactor(
-			privateKey.toPublicKey(),
-			h,
-		);
+		const recovery = signature.CalculateRecoveryFactor(privateKey.toPublicKey(), h);
+
 		return this._sign(signature, address, recovery);
+	}
+
+	/**
+	 * Sign with BRC-77 message signing protocol
+	 */
+	private _signBRC77(message: number[], privateKey: PrivateKey, verifier?: PublicKey): SignResponse {
+		const vin = this._refVin === -1 ? this._targetVout : this._refVin;
+		const address = privateKey.toAddress();
+		const brc77Sig = SignedMessage.sign(message, privateKey, verifier);
+
+		const signedAsm = `${sigmaHex} ${toHex(toArray(Algorithm.BRC77))} ${toHex(toArray(address))} ${toHex(brc77Sig)} ${toHex(toArray(vin.toString()))}`;
+
+		const sig: Sig = {
+			algorithm: Algorithm.BRC77,
+			address,
+			signature: toBase64(brc77Sig),
+			vin,
+			targetVout: this._targetVout,
+		};
+
+		return this._applySignature(signedAsm, sig);
 	}
 
 	async remoteSign(
@@ -370,7 +396,11 @@ export class Sigma {
 		}
 	}
 
-	verify = () => {
+	/**
+	 * Verify the signature
+	 * @param recipientPrivateKey - for BRC77 private signatures, the recipient's private key
+	 */
+	verify = (recipientPrivateKey?: PrivateKey) => {
 		if (!this.sig) {
 			throw new Error("No signature data provided");
 		}
@@ -379,6 +409,13 @@ export class Sigma {
 			throw new Error("No tx data provided");
 		}
 
+		if (this.sig.algorithm === Algorithm.BRC77) {
+			// BRC-77 verification
+			const sigBytes = toArray(this.sig.signature, "base64");
+			return SignedMessage.verify(msgHash, sigBytes, recipientPrivateKey);
+		}
+
+		// BSM verification
 		const signature = Signature.fromCompact(this.sig.signature, "base64");
 		const recovery = deduceRecovery(signature, msgHash, this.sig.address);
 		return recovery !== -1;

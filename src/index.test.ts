@@ -1,6 +1,6 @@
 import { describe, it, beforeAll, afterAll, mock } from "bun:test";
 import * as assert from "node:assert";
-import { Sigma } from "./";
+import { Sigma, Algorithm } from "./";
 import { PrivateKey, Script, Transaction, type TransactionInput, type TransactionOutput, Utils } from "@bsv/sdk";
 
 const { toHex, toArray } = Utils;
@@ -243,5 +243,60 @@ describe("Sigma Protocol", () => {
     assert.strictEqual(sigma.verify(), true);
     assert.strictEqual(sigma.sig?.address, mockAddress);
     assert.strictEqual(sigma.sig?.signature, mockSignature);
+  });
+
+  it("signs and verifies with BRC-77 algorithm", () => {
+    const tx = new Transaction(1, [], [txOut]);
+    const sigma = new Sigma(tx, 0, 0);
+
+    // Sign with BRC-77
+    sigma.sign(privateKey, Algorithm.BRC77);
+
+    // Verify the signature
+    const isValid = sigma.verify();
+    assert.strictEqual(isValid, true);
+    assert.strictEqual(sigma.sig?.algorithm, Algorithm.BRC77);
+  });
+
+  it("BRC-77 signed tx is verified after parsing", () => {
+    const tx = new Transaction(1, [], [txOut]);
+    const sigma = new Sigma(tx, 0, 0);
+
+    // Sign with BRC-77
+    const { signedTx } = sigma.sign(privateKey, Algorithm.BRC77);
+
+    // Create new Sigma instance from signed transaction
+    const sigma2 = new Sigma(signedTx);
+
+    assert.strictEqual(sigma2.sig?.algorithm, Algorithm.BRC77);
+    assert.strictEqual(sigma2.getSigInstanceCount(), 1);
+
+    const isValid = sigma2.verify();
+    assert.strictEqual(isValid, true);
+  });
+
+  it("supports mixed BSM and BRC-77 signatures on same output", () => {
+    const tx = new Transaction(1, [], [txOut]);
+    const sigma = new Sigma(tx, 0, 0);
+
+    // First signature with BSM
+    const { signedTx } = sigma.sign(privateKey, Algorithm.BSM);
+    assert.strictEqual(sigma.verify(), true);
+
+    // Second signature with BRC-77
+    const sigma2 = new Sigma(signedTx, 0, 1);
+    sigma2.sign(privateKey2, Algorithm.BRC77);
+
+    assert.strictEqual(sigma2.getSigInstanceCount(), 2);
+
+    // Verify first signature (BSM)
+    sigma2.setSigmaInstance(0);
+    assert.strictEqual(sigma2.sig?.algorithm, Algorithm.BSM);
+    assert.strictEqual(sigma2.verify(), true);
+
+    // Verify second signature (BRC-77)
+    sigma2.setSigmaInstance(1);
+    assert.strictEqual(sigma2.sig?.algorithm, Algorithm.BRC77);
+    assert.strictEqual(sigma2.verify(), true);
   });
 });
