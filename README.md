@@ -37,7 +37,9 @@ OP_RETURN
 Here's a brief explanation of the fields:
 
 * `Additional Data`: The OP\_RETURN data you want to sign. Optional. If present, this library will add a protocol separator character "|" which is not signed. If absent, the library will add "OP\_RETURN" to the script, followed by the SIGMA protocol fields.
-* `Signing Algorithm`: The algorithm used for signing, in this case, "ECDSA" for Standard ECDSA Message Signing using SHA256 as the digest. No other algorithms are currently supported by the library.
+* `Signing Algorithm`: The algorithm used for signing. Supported algorithms:
+  * `BSM` - Bitcoin Signed Message (default). Standard ECDSA message signing using SHA256 as the digest with magic prefix. Signatures can be verified by anyone who knows the signer's address.
+  * `BRC77` - BRC-77 Message Signing. Uses derived child keys and embeds the signer's public key in the signature. Supports both public verification and private verification (where only a specific recipient can verify).
 * `Signing Address`: The P2PKH address derived from the public key of the signer. If using Bitcoin Attestation Protocol to sign with an existing on-chain identity, this should be derived from your current signing key.
 * `Signature`: The Sigma signature generated using the private key corresponding to the signing address. You will see the signature in hex format in Bitcoin scripts, but the library will return this field in Base64 format for the sake of consistency with other signing schemes.
 * `VIN` : The input to reference by index. The txid of this input will be incorporated into the signature. If a -1 is specified, it indicates the corresponding input will be signed.
