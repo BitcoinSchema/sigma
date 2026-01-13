@@ -7,13 +7,35 @@ import {
 	Transaction,
 	type TransactionOutput,
 	BigNumber,
+	Utils,
+	OP,
 } from "@bsv/sdk";
-import { Utils } from "@bsv/sdk";
+
 const { magicHash } = BSM;
-const {
-	toHex,
-  toArray
-} = Utils
+const { toHex, toArray, toUTF8, toBase64 } = Utils;
+
+/** SIGMA protocol identifier */
+export const SIGMA_PREFIX = "SIGMA";
+export const sigmaHex = "5349474d41";
+
+/** Convert hex string to byte array */
+const hexToBytes = (hex: string): number[] => {
+	const bytes: number[] = [];
+	for (let i = 0; i < hex.length; i += 2) {
+		bytes.push(Number.parseInt(hex.substring(i, i + 2), 16));
+	}
+	return bytes;
+};
+
+/** Write a 32-bit unsigned integer in little-endian format */
+const writeUint32LE = (value: number): number[] => {
+	return [
+		value & 0xff,
+		(value >> 8) & 0xff,
+		(value >> 16) & 0xff,
+		(value >> 24) & 0xff,
+	];
+};
 
 export type AuthToken = {
 	type: "header" | "query";
@@ -26,10 +48,9 @@ export type RemoteSigningResponse = {
 	sig: string;
 	message: string;
 	ts: number;
-  recovery: number;
+	recovery: number;
 };
 
-export const sigmaHex = "5349474d41";
 export enum Algorithm {
 	BSM = "BSM",
 }
@@ -45,6 +66,124 @@ export type Sig = {
 export interface SignResponse extends Sig {
 	sigmaScript: Script;
 	signedTx: Transaction;
+}
+
+/**
+ * Parse SIGMA instances from a script using chunk-based parsing
+ * Handles both standard format and OP_RETURN embedded format
+ */
+function parseSigmaInstances(script: Script, targetVout: number): Sig[] {
+	const instances: Sig[] = [];
+	const chunks = script.chunks;
+
+	for (let i = 0; i < chunks.length; i++) {
+		const chunk = chunks[i];
+
+		// Check for standard format: SIGMA as a separate data chunk
+		if (chunk.data && toUTF8(chunk.data) === SIGMA_PREFIX) {
+			// Standard format: SIGMA | algorithm | address | signature | vin
+			if (i + 4 < chunks.length) {
+				const algoChunk = chunks[i + 1];
+				const addrChunk = chunks[i + 2];
+				const sigChunk = chunks[i + 3];
+				const vinChunk = chunks[i + 4];
+
+				if (algoChunk?.data && addrChunk?.data && sigChunk?.data && vinChunk?.data) {
+					instances.push({
+						algorithm: toUTF8(algoChunk.data) as Algorithm,
+						address: toUTF8(addrChunk.data),
+						signature: toBase64(sigChunk.data),
+						vin: Number.parseInt(toUTF8(vinChunk.data), 10),
+						targetVout,
+					});
+					i += 4; // Skip past the SIGMA fields
+				}
+			}
+		}
+		// Check for OP_RETURN embedded format
+		else if (chunk.op === OP.OP_RETURN && chunk.data && chunk.data.length > 0) {
+			// Parse the OP_RETURN data as an inner script
+			try {
+				const innerScript = Script.fromBinary(chunk.data);
+				const innerChunks = innerScript.chunks;
+
+				for (let j = 0; j < innerChunks.length; j++) {
+					const innerChunk = innerChunks[j];
+
+					if (innerChunk.data && toUTF8(innerChunk.data) === SIGMA_PREFIX) {
+						// Found SIGMA in inner script
+						if (j + 4 < innerChunks.length) {
+							const algoChunk = innerChunks[j + 1];
+							const addrChunk = innerChunks[j + 2];
+							const sigChunk = innerChunks[j + 3];
+							const vinChunk = innerChunks[j + 4];
+
+							if (algoChunk?.data && addrChunk?.data && sigChunk?.data && vinChunk?.data) {
+								instances.push({
+									algorithm: toUTF8(algoChunk.data) as Algorithm,
+									address: toUTF8(addrChunk.data),
+									signature: toBase64(sigChunk.data),
+									vin: Number.parseInt(toUTF8(vinChunk.data), 10),
+									targetVout,
+								});
+								j += 4;
+							}
+						}
+					}
+				}
+			} catch {
+				// Failed to parse inner script, continue
+			}
+		}
+	}
+
+	return instances;
+}
+
+/**
+ * Count SIGMA instances in a script using chunk-based parsing
+ */
+function countSigmaInstances(script: Script): number {
+	return parseSigmaInstances(script, 0).length;
+}
+
+/**
+ * Find the position of SIGMA in script chunks for data hash calculation
+ * Returns the chunk index where SIGMA starts, or -1 if not found
+ */
+function findSigmaPosition(script: Script, instanceIndex: number): number {
+	const chunks = script.chunks;
+	let occurrences = 0;
+
+	for (let i = 0; i < chunks.length; i++) {
+		const chunk = chunks[i];
+
+		// Check for standard format
+		if (chunk.data && toUTF8(chunk.data) === SIGMA_PREFIX) {
+			if (occurrences === instanceIndex) {
+				return i;
+			}
+			occurrences++;
+		}
+		// Check for OP_RETURN embedded format
+		else if (chunk.op === OP.OP_RETURN && chunk.data && chunk.data.length > 0) {
+			try {
+				const innerScript = Script.fromBinary(chunk.data);
+				for (const innerChunk of innerScript.chunks) {
+					if (innerChunk.data && toUTF8(innerChunk.data) === SIGMA_PREFIX) {
+						if (occurrences === instanceIndex) {
+							return i; // Return the OP_RETURN chunk index
+						}
+						occurrences++;
+					}
+				}
+			} catch {
+				// Continue
+			}
+		}
+	}
+
+	return -1;
 }
 
 export class Sigma {
@@ -93,7 +232,6 @@ export class Sigma {
 		const combinedHashes = new Uint8Array(inputBytes.length + dataBytes.length);
 		combinedHashes.set(inputBytes, 0);
 		combinedHashes.set(dataBytes, inputBytes.length);
-		// console.log("combinedHashes", Buffer.from(combinedHashes).toString('hex'))
 		return Hash.sha256(Array.from(combinedHashes));
 	}
 
@@ -103,18 +241,12 @@ export class Sigma {
 
 	_sign(signature: Signature, address: string, recovery: number) {
 		const vin = this._refVin === -1 ? this._targetVout : this._refVin;
-    if (recovery === undefined) {
-      throw new Error("Failed recovery missing")
-    }
-		const signedAsm = `${sigmaHex} ${Buffer.from(
-			Algorithm.BSM,
-			"utf-8",
-		).toString("hex")} ${Buffer.from(address, "utf-8").toString(
-			"hex",
-		)} ${signature.toCompact(recovery, true, "hex")} ${Buffer.from(
-			vin.toString(),
-			"utf-8",
-		).toString("hex")}`;
+		if (recovery === undefined) {
+			throw new Error("Failed recovery missing");
+		}
+
+		// Build SIGMA script using chunks
+		const signedAsm = `${sigmaHex} ${toHex(toArray(Algorithm.BSM))} ${toHex(toArray(address))} ${signature.toCompact(recovery, true, "hex")} ${toHex(toArray(vin.toString()))}`;
 
 		const sigmaScript = Script.fromASM(signedAsm);
 
@@ -153,8 +285,8 @@ export class Sigma {
 		const newScript = Script.fromASM(newScriptAsm);
 		const signedTx = new Transaction(
 			this._transaction.version,
-			this._transaction.inputs.map(i => ({ ...i })),
-			this._transaction.outputs.map(o => ({ ...o }))
+			this._transaction.inputs.map((i) => ({ ...i })),
+			this._transaction.outputs.map((o) => ({ ...o })),
 		);
 		const signedTxOut = {
 			satoshis: this.targetTxOut?.satoshis,
@@ -171,37 +303,39 @@ export class Sigma {
 			...this._sig,
 		};
 	}
-	// Sign with Sigma protocol
-	// privateKey: a @bsv/ts-sdk PrivateKey
-	// inputs: either an array of TxIn from @bsv/ts-sdk or an array o string txids
-	//    must be in the same order they are added to the transaction
-	//    adding input txids to the signature scheme eliminates replay attacks
-	// dataHash: a sha256 hash of the data to be signed
-	//     it should include all the data in the output script prior to the "SIGMA" protocol instance
-	//     excluding the "|" protocol separator and "SIGMA" prefix itself
+
+	/**
+	 * Sign with Sigma protocol
+	 * @param privateKey - a @bsv/sdk PrivateKey
+	 */
 	sign(privateKey: PrivateKey): SignResponse {
 		const message = this.getMessageHash();
-		const signature = BSM.sign(message, privateKey, 'raw') as Signature;
+		const signature = BSM.sign(message, privateKey, "raw") as Signature;
 		const address = privateKey.toAddress();
 
-    const h = new BigNumber(magicHash(message))
-    const recovery = signature.CalculateRecoveryFactor(privateKey.toPublicKey(), h)
+		const h = new BigNumber(magicHash(message));
+		const recovery = signature.CalculateRecoveryFactor(
+			privateKey.toPublicKey(),
+			h,
+		);
 		return this._sign(signature, address, recovery);
 	}
+
 	async remoteSign(
 		keyHost: string,
 		authToken?: AuthToken,
 	): Promise<SignResponse> {
 		const headers = authToken
 			? {
-				[authToken.key]: authToken.value,
-			}
+					[authToken.key]: authToken.value,
+				}
 			: {};
 
-		const url = `${keyHost}/sign${authToken?.type === "query"
+		const url = `${keyHost}/sign${
+			authToken?.type === "query"
 				? `?${authToken?.key}=${authToken?.value}`
 				: ""
-			}`;
+		}`;
 
 		const requestBody = {
 			message: toHex(this.getMessageHash()),
@@ -225,8 +359,8 @@ export class Sigma {
 				throw new Error(`HTTP Error: ${response.status}`);
 			}
 
-			const responseData = await response.json() as RemoteSigningResponse
-			const { address, message, sig, recovery } = responseData;
+			const responseData = (await response.json()) as RemoteSigningResponse;
+			const { address, sig, recovery } = responseData;
 			const signature = Signature.fromCompact(sig, "base64");
 
 			return this._sign(signature, address, recovery);
@@ -240,14 +374,14 @@ export class Sigma {
 		if (!this.sig) {
 			throw new Error("No signature data provided");
 		}
-		const msgHash = this.getMessageHash()
+		const msgHash = this.getMessageHash();
 		if (!msgHash) {
 			throw new Error("No tx data provided");
 		}
 
 		const signature = Signature.fromCompact(this.sig.signature, "base64");
-    const recovery = deduceRecovery(signature, msgHash, this.sig.address)
-		return recovery !== -1
+		const recovery = deduceRecovery(signature, msgHash, this.sig.address);
+		return recovery !== -1;
 	};
 
 	getInputHash = (): number[] => {
@@ -262,18 +396,20 @@ export class Sigma {
 	private _getInputHashByVin = (vin: number): number[] => {
 		const txIn = this._transaction.inputs[vin];
 		if (txIn?.sourceTXID) {
-			const outpointBytes = Buffer.alloc(36)
-			const txidBuf = Buffer.from(txIn.sourceTXID, 'hex')
-			outpointBytes.set(txidBuf, 0)
-			outpointBytes.writeUInt32LE(txIn.sourceOutputIndex, 32)
-			return Hash.sha256(Array.from(outpointBytes));
+			// Build outpoint: 32-byte txid + 4-byte output index (little endian)
+			const txidBytes = hexToBytes(txIn.sourceTXID);
+			const indexBytes = writeUint32LE(txIn.sourceOutputIndex);
+			const outpointBytes = [...txidBytes, ...indexBytes];
+			return Hash.sha256(outpointBytes);
 		}
 		// using dummy hash
-		return Hash.sha256(Array.from(new Uint8Array(32)));
+		return Hash.sha256(new Array(32).fill(0));
 	};
 
-	// gets the Hash.sha256 for a given sigma instance within an output script
-	// an example of 2 instances would be a user signature followed by a platform signature
+	/**
+	 * Gets the Hash.sha256 for a given sigma instance within an output script
+	 * An example of 2 instances would be a user signature followed by a platform signature
+	 */
 	getDataHash = (): number[] => {
 		if (!this._transaction) {
 			throw new Error("No transaction provided");
@@ -281,91 +417,121 @@ export class Sigma {
 		const outputScript =
 			this._transaction?.outputs[this._targetVout].lockingScript;
 
-		const scriptChunks = outputScript?.toASM().split(" ") || [];
+		const chunks = outputScript.chunks;
+		let occurrences = 0;
 
-		// loop over the script chunks and set the endIndex when the nTh instance is found
-		let occurances = 0;
-		for (let i = 0; i < scriptChunks.length; i++) {
-			if (scriptChunks[i].toUpperCase() === sigmaHex.toUpperCase()) {
-				if (occurances === this._sigmaInstance) {
-					// the -1 is to account for either the OP_RETURN
-					// or "|" separator which is not signed
-					const dataChunks = scriptChunks.slice(0, i - 1);
-					const dataScript = Script.fromASM(dataChunks.join(" "));
+		// Find the SIGMA instance and calculate hash of data before it
+		for (let i = 0; i < chunks.length; i++) {
+			const chunk = chunks[i];
+
+			// Check for standard format: SIGMA as a separate data chunk
+			if (chunk.data && toUTF8(chunk.data) === SIGMA_PREFIX) {
+				if (occurrences === this._sigmaInstance) {
+					// Hash everything before the separator (pipe or OP_RETURN before SIGMA)
+					// The -1 accounts for the separator
+					const dataChunks = chunks.slice(0, i - 1);
+					const dataScript = new Script();
+					for (const c of dataChunks) {
+						if (c.op !== undefined && c.data === undefined) {
+							dataScript.writeOpCode(c.op);
+						} else if (c.data) {
+							dataScript.writeBin(c.data);
+						}
+					}
 					return Hash.sha256(dataScript.toBinary());
 				}
-				occurances++;
+				occurrences++;
+			}
+			// Check for OP_RETURN embedded format
+			else if (chunk.op === OP.OP_RETURN && chunk.data && chunk.data.length > 0) {
+				try {
+					const innerScript = Script.fromBinary(chunk.data);
+					for (const innerChunk of innerScript.chunks) {
+						if (innerChunk.data && toUTF8(innerChunk.data) === SIGMA_PREFIX) {
+							if (occurrences === this._sigmaInstance) {
+								// For OP_RETURN embedded format, hash everything before the OP_RETURN chunk
+								const dataChunks = chunks.slice(0, i);
+								const dataScript = new Script();
+								for (const c of dataChunks) {
+									if (c.op !== undefined && c.data === undefined) {
+										dataScript.writeOpCode(c.op);
+									} else if (c.data) {
+										dataScript.writeBin(c.data);
+									}
+								}
+								return Hash.sha256(dataScript.toBinary());
+							}
+							occurrences++;
+						}
+					}
+				} catch {
+					// Continue if inner script parsing fails
+				}
 			}
 		}
 
-		// If no endIndex found, return the hash for the entire script
-		const dataScript = Script.fromASM(scriptChunks.join(" "));
-		return Hash.sha256(dataScript.toBinary());
+		// If no SIGMA found, return the hash for the entire script
+		return Hash.sha256(outputScript.toBinary());
 	};
 
 	get targetTxOut(): TransactionOutput | null {
 		return this._transaction.outputs[this._targetVout] || null;
 	}
 
-	// get the signature from the selected sigma instance
+	/**
+	 * Get the signature from the selected sigma instance
+	 * Uses chunk-based parsing to handle both standard and OP_RETURN embedded formats
+	 */
 	get sig(): Sig | null {
 		const output = this._transaction.outputs[this._targetVout];
-		const outputScript = output?.lockingScript;
-
-		const scriptChunks = outputScript?.toASM().split(" ") || [];
-		const instances: Sig[] = [];
-
-		for (let i = 0; i < scriptChunks.length; i++) {
-			if (scriptChunks[i].toUpperCase() === sigmaHex.toUpperCase()) {
-				const sig = {
-					algorithm: Buffer.from(scriptChunks[i + 1], "hex").toString("utf-8"),
-					address: Buffer.from(scriptChunks[i + 2], "hex").toString("utf-8"),
-					signature: Buffer.from(scriptChunks[i + 3], "hex").toString("base64"),
-					vin: Number.parseInt(
-						Buffer.from(scriptChunks[i + 4], "hex").toString("utf-8"),
-					),
-				} as Sig;
-
-				instances.push(sig);
-
-				// fast forward to the next possible instance position
-				// 3 fields + 1 extra for the "|" separator
-				i += 4;
-			}
+		if (!output?.lockingScript) {
+			return this._sig;
 		}
-		return instances.length === 0 ? this._sig : instances[this._sigmaInstance];
+
+		const instances = parseSigmaInstances(output.lockingScript, this._targetVout);
+
+		if (instances.length === 0) {
+			return this._sig;
+		}
+
+		return instances[this._sigmaInstance] ?? null;
 	}
 
 	getSigInstanceCount(): number {
-		const existingAsm = this.targetTxOut?.lockingScript.toASM();
-		const scriptChunks: string[] = existingAsm?.split(" ") || [];
-		return scriptChunks.filter(
-			(chunk) => chunk.toUpperCase() === sigmaHex.toUpperCase(),
-		).length;
+		const script = this.targetTxOut?.lockingScript;
+		if (!script) return 0;
+		return countSigmaInstances(script);
 	}
 
 	getSigInstancePosition(): number {
-		const existingAsm = this.targetTxOut?.lockingScript.toASM();
-		const scriptChunks: string[] = existingAsm?.split(" ") || [];
-		return scriptChunks.findIndex(
-			(chunk) => chunk.toUpperCase() === sigmaHex.toUpperCase(),
-		);
+		const script = this.targetTxOut?.lockingScript;
+		if (!script) return -1;
+		return findSigmaPosition(script, this._sigmaInstance);
 	}
 }
 
-
-// Deduce the recovery factor for a given signature, returns -1 if recovery is not possible
-const deduceRecovery = (signature: Signature, message: number[], address: string): number => {
-  for (let recovery = 0; recovery < 4; recovery++) {
-    try {
-      const publicKey = signature.RecoverPublicKey(recovery, new BigNumber(magicHash(message)))
-      const sigFitsPubkey = BSM.verify(message, signature, publicKey);
-      if (sigFitsPubkey && publicKey.toAddress() === address) {
-        return recovery
-      }
-    } catch (e) {
-      // try next recovery
-    }
-  }
-  return -1
-}
+/**
+ * Deduce the recovery factor for a given signature
+ * @returns Recovery factor (0-3) or -1 if recovery is not possible
+ */
+const deduceRecovery = (
+	signature: Signature,
+	message: number[],
+	address: string,
+): number => {
+	for (let recovery = 0; recovery < 4; recovery++) {
+		try {
+			const publicKey = signature.RecoverPublicKey(
+				recovery,
+				new BigNumber(magicHash(message)),
+			);
+			const sigFitsPubkey = BSM.verify(message, signature, publicKey);
+			if (sigFitsPubkey && publicKey.toAddress() === address) {
+				return recovery;
+			}
+		} catch {
+			// try next recovery
+		}
+	}
+	return -1;
+};

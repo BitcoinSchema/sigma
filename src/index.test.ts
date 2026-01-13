@@ -1,40 +1,41 @@
+import { describe, it, beforeAll, afterAll, mock } from "bun:test";
 import * as assert from "node:assert";
 import { Sigma } from "./";
-import { PrivateKey, Script, Transaction, type TransactionInput, type TransactionOutput } from "@bsv/sdk";
-import { Utils } from "@bsv/sdk";
-const { toHex } = Utils;
+import { PrivateKey, Script, Transaction, type TransactionInput, type TransactionOutput, Utils } from "@bsv/sdk";
+
+const { toHex, toArray } = Utils;
 
 const mockAddress = "1ACLHVPVnB8AmLCyD5hPQtPCSCccjiUn7H";
 const mockMessage =
   "234900c2e071fe9a8cc2a41a6b40d03bb3dac1475162996500b77149ab66bfd4";
 const mockSignature =
-"HxKekpndJQqQDQVAgH/SaInseYRfqtjde0eWZm+fkWc5CRnZ7ey1zJc7dssNb4I+OwcJPfTQLvUHwCxevFRP4HE=";
+  "HxKekpndJQqQDQVAgH/SaInseYRfqtjde0eWZm+fkWc5CRnZ7ey1zJc7dssNb4I+OwcJPfTQLvUHwCxevFRP4HE=";
 const mockRecovery = 0;
 
-// manually mocking fetch because all libraries are terrible and dont work with native fetch and/or jest
+const originalFetch = globalThis.fetch;
+
 beforeAll(() => {
-  global.fetch = jest.fn((url: string, options: RequestInit) => {
-    if (url.includes('http://localhost:21000/sign')) {
+  globalThis.fetch = mock((url: string, _options: RequestInit) => {
+    if (url.includes("http://localhost:21000/sign")) {
       return Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({
-          address: mockAddress,
-          sig: mockSignature,
-          message: mockMessage,
-          recovery: mockRecovery,
-          ts: Date.now(),
-        }),
-      });
+        json: () =>
+          Promise.resolve({
+            address: mockAddress,
+            sig: mockSignature,
+            message: mockMessage,
+            recovery: mockRecovery,
+            ts: Date.now(),
+          }),
+      } as Response);
     }
-    // Handle other cases or throw an error
-    return Promise.reject(new Error('Unexpected URL'));
-  }) as jest.Mock
+    return Promise.reject(new Error("Unexpected URL"));
+  }) as typeof fetch;
 });
 
 afterAll(() => {
-  jest.restoreAllMocks();
+  globalThis.fetch = originalFetch;
 });
-
 
 describe("Sigma Protocol", () => {
   // Test data
@@ -45,10 +46,7 @@ describe("Sigma Protocol", () => {
     "L1U5FS1PzJwCiFA43hahBUSLytqVoGjSymKSz5WJ92v8YQBBsGZ1"
   );
 
-  const outputScriptAsm = `OP_0 OP_RETURN ${Buffer.from(
-    "pushdata1",
-    "utf-8"
-  ).toString("hex")} ${Buffer.from("pushdata2", "utf-8").toString("hex")}`;
+  const outputScriptAsm = `OP_0 OP_RETURN ${toHex(toArray("pushdata1"))} ${toHex(toArray("pushdata2"))}`;
 
   const script = Script.fromASM(outputScriptAsm);
   // Build a simple transaction with the output script
@@ -59,9 +57,7 @@ describe("Sigma Protocol", () => {
     const tx = new Transaction(1, [], [txOut]);
     const sigma = new Sigma(tx, 0, 0);
     // Sign the message
-    const { sigmaScript, address, signature, signedTx } =
-      sigma.sign(privateKey);
-
+    sigma.sign(privateKey);
 
     // Verify the signature
     const isValid = sigma.verify();
@@ -81,10 +77,7 @@ describe("Sigma Protocol", () => {
     // Sign the message
     const { signedTx } = sigma.sign(privateKey);
 
-    const asmAfter = signedTx
-      .outputs[0]
-      ?.lockingScript
-      .toASM();
+    const asmAfter = signedTx.outputs[0]?.lockingScript.toASM();
 
     assert.notEqual(asmAfter, asm);
   });
@@ -94,16 +87,8 @@ describe("Sigma Protocol", () => {
     const tx = new Transaction(1, [], [txOut]);
     const sigma = new Sigma(tx, 0, 0);
 
-    // ... Before signing
-    // console.log({ inputHashBeforeSigning: sigma.getInputHash().to_hex() });
-    // console.log({ dataHashBeforeSigning: sigma.getDataHash().to_hex() });
-
     // Sign the message
     const { signedTx } = sigma.sign(privateKey);
-
-    // ... After signing
-    // console.log({ inputHashAfterSigning: sigma.getInputHash().to_hex() });
-    // console.log({ dataHashAfterSigning: sigma.getDataHash().to_hex() });
 
     const inputHash = toHex(sigma.getInputHash());
     const dataHash = toHex(sigma.getDataHash());
@@ -140,11 +125,12 @@ describe("Sigma Protocol", () => {
 
     // add some inputs
     const txIn = {
-      sourceTXID: "810755d937913d4228e1a4d192046d96c0642e2678d6a90e1cb794b0c2aeb78c",
+      sourceTXID:
+        "810755d937913d4228e1a4d192046d96c0642e2678d6a90e1cb794b0c2aeb78c",
       sourceOutputIndex: 0,
       sequence: 0xffffffff,
     } as TransactionInput;
-      
+
     tx.addInput(txIn);
 
     // input hash should change after adding inputs
@@ -159,24 +145,25 @@ describe("Sigma Protocol", () => {
     assert.strictEqual(sigma.verify(), true);
   });
 
-  it("specity an input to sign", () => {
+  it("specify an input to sign", () => {
     // This is useful for calculating accurate fees considering the size of the
     // signature
 
     const tx = new Transaction(1, [], [txOut]);
     // add some inputs
     const txIn = {
-      sourceTXID: "810755d937913d4228e1a4d192046d96c0642e2678d6a90e1cb794b0c2aeb78b",
-      sourceOutputIndex: 0,
-      sequence: 0xffffffff,
-    } as TransactionInput;
-    
-    const txIn2 = {
-      sourceTXID: "810755d937913d4228e1a4d192046d96c0642e2678d6a90e1cb794b0c2aeb78c",
+      sourceTXID:
+        "810755d937913d4228e1a4d192046d96c0642e2678d6a90e1cb794b0c2aeb78b",
       sourceOutputIndex: 0,
       sequence: 0xffffffff,
     } as TransactionInput;
 
+    const txIn2 = {
+      sourceTXID:
+        "810755d937913d4228e1a4d192046d96c0642e2678d6a90e1cb794b0c2aeb78c",
+      sourceOutputIndex: 0,
+      sequence: 0xffffffff,
+    } as TransactionInput;
 
     tx.addInput(txIn);
     tx.addInput(txIn2);
@@ -230,10 +217,7 @@ describe("Sigma Protocol", () => {
   });
 
   it("signs a message correctly with remote signing", async () => {
-    const outputScriptAsm = `OP_0 OP_RETURN ${Buffer.from(
-      "pushdata1",
-      "utf-8"
-    ).toString("hex")} ${Buffer.from("pushdata2", "utf-8").toString("hex")}`;
+    const outputScriptAsm = `OP_0 OP_RETURN ${toHex(toArray("pushdata1"))} ${toHex(toArray("pushdata2"))}`;
 
     const script = Script.fromASM(outputScriptAsm);
     const tx = new Transaction();
@@ -241,7 +225,7 @@ describe("Sigma Protocol", () => {
       satoshis: 0,
       lockingScript: script,
     } as TransactionOutput;
-    
+
     tx.addOutput(txOut);
 
     const sigma = new Sigma(tx, 0, 0);
