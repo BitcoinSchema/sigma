@@ -275,6 +275,24 @@ describe("Sigma Protocol", () => {
     assert.strictEqual(isValid, true);
   });
 
+  it("rejects BRC-77 when the envelope signer does not match the claimed address", () => {
+    const tx = new Transaction(1, [], [txOut]);
+    const sigma = new Sigma(tx, 0, 0);
+    const { signedTx } = sigma.sign(privateKey, Algorithm.BRC77);
+
+    const asmChunks = signedTx.outputs[0].lockingScript.toASM().split(" ");
+    const sigmaIndex = asmChunks.indexOf(toHex(toArray("SIGMA")));
+    assert.notStrictEqual(sigmaIndex, -1);
+
+    const claimedAddress = privateKey2.toAddress();
+    asmChunks[sigmaIndex + 2] = toHex(toArray(claimedAddress));
+    signedTx.outputs[0].lockingScript = Script.fromASM(asmChunks.join(" "));
+
+    const tamperedSigma = new Sigma(signedTx);
+    assert.strictEqual(tamperedSigma.sig?.address, claimedAddress);
+    assert.strictEqual(tamperedSigma.verify(), false);
+  });
+
   it("supports mixed BSM and BRC-77 signatures on same output", () => {
     const tx = new Transaction(1, [], [txOut]);
     const sigma = new Sigma(tx, 0, 0);
