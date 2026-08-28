@@ -2,7 +2,7 @@ import {
 	BSM,
 	Hash,
 	type PrivateKey,
-	type PublicKey,
+	PublicKey,
 	Script,
 	Signature,
 	SignedMessage,
@@ -412,7 +412,14 @@ export class Sigma {
 		if (this.sig.algorithm === Algorithm.BRC77) {
 			// BRC-77 verification
 			const sigBytes = toArray(this.sig.signature, "base64");
-			return SignedMessage.verify(msgHash, sigBytes, recipientPrivateKey);
+			if (!SignedMessage.verify(msgHash, sigBytes, recipientPrivateKey)) {
+				return false;
+			}
+
+			// BRC-77 serializes the signer's 33-byte identity public key
+			// immediately after its 4-byte version field.
+			const signerPublicKey = PublicKey.fromDER(sigBytes.slice(4, 37));
+			return signerPublicKey.toAddress() === this.sig.address;
 		}
 
 		// BSM verification
